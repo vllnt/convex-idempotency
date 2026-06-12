@@ -5,7 +5,10 @@
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@9.15.4",
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -48,19 +51,19 @@
   },
   "dependencies": {},
   "peerDependencies": {
-    "convex": "^1.36.1"
+    "convex": "^1.41.0"
   },
   "devDependencies": {
-    "@edge-runtime/vm": "^4.0.0",
-    "@vitest/coverage-v8": "^3.0.0",
+    "@edge-runtime/vm": "^5.0.0",
+    "@vitest/coverage-v8": "^4.1.8",
     "@vllnt/eslint-config": "^1.0.0",
     "@vllnt/typescript": "^1.0.0",
-    "convex": "^1.36.1",
-    "convex-test": "^0.0.50",
+    "convex": "^1.41.0",
+    "convex-test": "^0.0.53",
     "eslint": "^9.0.0",
     "prettier": "^3.4.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.8"
   },
   "homepage": "https://github.com/vllnt/convex-idempotency#readme",
   "bugs": {
@@ -78,5 +81,9 @@
     "access": "public"
   },
   "sideEffects": false,
-  "keywords": ["convex", "convex-component", "idempotency"]
+  "keywords": [
+    "convex",
+    "convex-component",
+    "idempotency"
+  ]
 }

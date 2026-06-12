@@ -1,0 +1,26 @@
+# @vllnt/convex-idempotency
+
+> Exactly-once idempotency key ledger for retried operations, as a Convex component
+
+`@vllnt/convex-idempotency` is a publishable Convex component. It targets `convex@^1.36.1`.
+It stores one sandboxed table - `keys` (unique per `(scope, key)`, holding a `status` of `inflight` or `done`, an opaque host `result`, and an `expiresAt` deadline). `begin` mints an inflight claim under a short server-timed lease (`inflightTtlMs`, default 60s) or replays a prior `done` outcome; `complete` returns a discriminated `recorded` outcome and extends a longer done grace window (`doneTtlMs`, default 24h); expired keys are re-minted in place; a bounded, self-rescheduling `purge` (and a built-in daily cron) sweeps them. Time is read from the server clock inside every handler - no caller-supplied `now` - so a hostile clock cannot force a key to look live or expired. Dedup rides the Convex mutation transaction. The host owns the operation, auth, and the result type (the client is generic over it, with an optional `resultValidator` narrowing the opaque stored value at the boundary); the component owns only the dedup ledger.
+
+## Docs
+
+- [README](README.md): Project overview, installation, usage examples, architecture
+- [API Reference](docs/API.md): Public class methods, return shapes, input validation
+- [Changelog](CHANGELOG.md): Version history and release notes
+- [Contributing](CONTRIBUTING.md): Development setup, validation commands, release workflow
+
+## Examples
+
+- [Example component wrapper](example/convex/example.ts): Host-app wrapper functions
+- [Example tests](example/convex/example.test.ts): End-to-end usage coverage with `convex-test`
+
+## Optional
+
+- [AGENTS](AGENTS.md): Canonical agent instructions for this repository
+- [Security Policy](SECURITY.md): Vulnerability reporting policy
+- [Code of Conduct](CODE_OF_CONDUCT.md): Community participation guidelines
+- [License](LICENSE)
+- [Full source bundle](llms-full.txt): Aggregated README, changelog, API docs, and key source files

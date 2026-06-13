@@ -49,6 +49,14 @@ Mints an inflight key with `expiresAt = now + inflightTtlMs`. An expired key (an
 status) is re-minted `fresh` by patching the existing row in place (the id is
 reused, the stale result cleared).
 
+**Expiry check order:** `begin` checks expiry **before** the done-state. An
+expired done key is therefore re-minted `fresh` — the grace window has elapsed and
+the operation may safely re-run.
+
+**`inflightTtlMs` must be a positive finite number.** Passing `0`, a negative
+value, or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`. A zero or
+negative TTL would produce `expiresAt ≤ now`, immediately expiring the claim.
+
 ### `complete(ctx, key, result?, opts?) → CompleteResult`
 
 `opts`: `{ scope?: string; doneTtlMs?: number; upsertOnMissing?: boolean }`.
@@ -65,6 +73,15 @@ lost claim:
 When `upsertOnMissing` is set, a `missing`/`expired` key is written as `done`
 anyway — recording finished work rather than dropping it (returns
 `{ recorded: true }`).
+
+**Expiry check order:** `complete` checks the done-state **before** expiry. An
+expired done key therefore returns `already_done`, not `expired` — a prior
+winner's recorded outcome must not be overwritten by a late attempt, even after
+the grace window has lapsed. The `expired` reason applies only to inflight keys
+whose lease lapsed before completion.
+
+**`doneTtlMs` must be a positive finite number.** Passing `0`, a negative value,
+or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 
 ### `purge(ctx, opts?) → number`
 

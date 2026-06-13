@@ -143,3 +143,80 @@ export const getStrict = query({
   returns: keyState,
   handler: (ctx, a) => strictIdem.get(ctx, a.key),
 });
+
+/**
+ * Host-side counter helpers used by the effect-once and crash-recovery tests.
+ * The counter lives in the host's own `counters` table — completely outside the
+ * component's sandboxed tables — so incrementing it proves the host's
+ * side-effect ran.
+ */
+export const incrementCounter = mutation({
+  args: { name: v.string() },
+  returns: v.number(),
+  handler: async (ctx, { name }) => {
+    const existing = await ctx.db
+      .query("counters")
+      .withIndex("by_name", (q) => q.eq("name", name))
+      .unique();
+    const next = existing === null ? 1 : existing.value + 1;
+    if (existing === null) {
+      await ctx.db.insert("counters", { name, value: next });
+    } else {
+      await ctx.db.patch(existing._id, { value: next });
+    }
+    return next;
+  },
+});
+
+export const getCounter = query({
+  args: { name: v.string() },
+  returns: v.number(),
+  handler: async (ctx, { name }) => {
+    const row = await ctx.db
+      .query("counters")
+      .withIndex("by_name", (q) => q.eq("name", name))
+      .unique();
+    return row?.value ?? 0;
+  },
+});
+
+/**
+ * Idempotency-gated increment: begin → increment → complete. Calling this
+ * multiple times with the same `idemKey` should result in the counter being
+ * incremented exactly once (the second call short-circuits at `begin` returning
+ * `done`).
+ */
+export const idempotentIncrement = mutation({
+  args: {
+    idemKey: v.string(),
+    counterName: v.string(),
+    inflightTtlMs: v.optional(v.number()),
+    doneTtlMs: v.optional(v.number()),
+  },
+  returns: v.union(
+    v.object({ ran: v.literal(true), value: v.number() }),
+    v.object({ ran: v.literal(false), value: v.number() }),
+  ),
+  handler: async (ctx, { idemKey, counterName, inflightTtlMs, doneTtlMs }) => {
+    const claim = await idem.begin(ctx, idemKey, { inflightTtlMs });
+    if (claim.state !== "fresh") {
+      const counter = await ctx.db
+        .query("counters")
+        .withIndex("by_name", (q) => q.eq("name", counterName))
+        .unique();
+      return { ran: false as const, value: counter?.value ?? 0 };
+    }
+    const existing = await ctx.db
+      .query("counters")
+      .withIndex("by_name", (q) => q.eq("name", counterName))
+      .unique();
+    const next = existing === null ? 1 : existing.value + 1;
+    if (existing === null) {
+      await ctx.db.insert("counters", { name: counterName, value: next });
+    } else {
+      await ctx.db.patch(existing._id, { value: next });
+    }
+    await idem.complete(ctx, idemKey, next, { doneTtlMs });
+    return { ran: true as const, value: next };
+  },
+});

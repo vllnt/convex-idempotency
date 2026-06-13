@@ -28,6 +28,7 @@ its meaning, and auth; this component owns only the dedup ledger.
 - **Split TTLs** — a short **inflight lease** (`inflightTtlMs`, default 60s) so a crashed worker's claim self-heals fast, and a longer **done grace** (`doneTtlMs`, default 24h) after which a key may be re-minted in place.
 - **Lost-claim detection** — `complete` returns a discriminated `{ recorded: true } | { recorded: false, reason }` so a host knows when its work finished but the ledger row was gone (`missing` / `expired` / `already_done`). Opt into `upsertOnMissing` to record it anyway.
 - **Server-sourced time** — expiry is read from the server clock inside every handler; a caller can never supply `now`, so an adversarial clock cannot force a key to look live or expired.
+- **TTL validation** — `inflightTtlMs` and `doneTtlMs` must be positive finite numbers. Passing `0`, a negative value, or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })` before any write, preventing a key from expiring immediately on creation.
 - **Typed result** — `Idempotency<TResult>` types the stored outcome end to end; pass a `resultValidator` to narrow the opaque stored value at the boundary (no unchecked cast). The component stores it opaquely.
 - **Scopes** — global by default, or namespace per tenant / operation type.
 - **Bounded purge + cron** — a built-in daily prune cron sweeps expired keys in bounded batches and self-reschedules until the tail is clean; idempotent, safe to run anytime.
@@ -176,6 +177,21 @@ All notable changes to this project are documented here. The format is based on
 - Bounded, self-rescheduling `purge` (`take(batch)` + scheduler) and a built-in
   daily prune cron (`crons.ts`); idempotent.
 
+### Fixed
+
+- `begin` and `complete` now reject a TTL argument that is ≤ 0 or non-finite with
+  `ConvexError({ code: "INVALID_TTL" })`. A zero or negative `inflightTtlMs` would
+  have produced `expiresAt ≤ now`, immediately expiring the key on creation and
+  breaking the dedup claim window. Same guard added for `doneTtlMs` in `complete`.
+
+### Documented
+
+- Expiry check order asymmetry between `begin` and `complete` is now documented in
+  TSDoc on both mutations. `begin` checks expiry before the done-state (an expired
+  done key re-mints fresh — the grace window elapsed, the operation may re-run).
+  `complete` checks the done-state before expiry (an expired done key returns
+  `already_done` — a prior winner's recorded outcome must not be overwritten).
+
 
 ---
 
@@ -232,6 +248,14 @@ Mints an inflight key with `expiresAt = now + inflightTtlMs`. An expired key (an
 status) is re-minted `fresh` by patching the existing row in place (the id is
 reused, the stale result cleared).
 
+**Expiry check order:** `begin` checks expiry **before** the done-state. An
+expired done key is therefore re-minted `fresh` — the grace window has elapsed and
+the operation may safely re-run.
+
+**`inflightTtlMs` must be a positive finite number.** Passing `0`, a negative
+value, or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`. A zero or
+negative TTL would produce `expiresAt ≤ now`, immediately expiring the claim.
+
 ### `complete(ctx, key, result?, opts?) → CompleteResult`
 
 `opts`: `{ scope?: string; doneTtlMs?: number; upsertOnMissing?: boolean }`.
@@ -248,6 +272,15 @@ lost claim:
 When `upsertOnMissing` is set, a `missing`/`expired` key is written as `done`
 anyway — recording finished work rather than dropping it (returns
 `{ recorded: true }`).
+
+**Expiry check order:** `complete` checks the done-state **before** expiry. An
+expired done key therefore returns `already_done`, not `expired` — a prior
+winner's recorded outcome must not be overwritten by a late attempt, even after
+the grace window has lapsed. The `expired` reason applies only to inflight keys
+whose lease lapsed before completion.
+
+**`doneTtlMs` must be a positive finite number.** Passing `0`, a negative value,
+or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 
 ### `purge(ctx, opts?) → number`
 
@@ -751,7 +784,7 @@ export const keyState = v.object({
 ## src/component/mutations.ts
 
 ```ts
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { api } from "./_generated/api";
 import { mutation } from "./_generated/server";
 import { beginResult, completeResult, jsonValue } from "./validators";
@@ -762,6 +795,16 @@ import { beginResult, completeResult, jsonValue } from "./validators";
  * force a key to look expired or live. `inflightTtlMs` bounds the inflight lease:
  * a crashed worker self-heals once its short lease lapses, after which the key is
  * re-minted in place (the row id is reused, not deleted and re-inserted).
+ *
+ * **Expiry check order (intentional asymmetry):** `begin` checks expiry BEFORE
+ * the done-state. An expired done key is therefore re-minted `fresh` (the
+ * outcome's grace window has elapsed; the key behaves as never-seen). This is the
+ * correct recovery path — the done grace exists precisely to replay within the
+ * window; outside it the operation may safely re-run.
+ *
+ * @throws `ConvexError({ code: "INVALID_TTL" })` when `inflightTtlMs` is not a
+ *   positive finite number (≤ 0 or non-finite would produce `expiresAt ≤ now`,
+ *   immediately expiring the claim and breaking the dedup window).
  */
 export const begin = mutation({
   args: {
@@ -771,6 +814,13 @@ export const begin = mutation({
   },
   returns: beginResult,
   handler: async (ctx, args) => {
+    if (!(args.inflightTtlMs > 0 && isFinite(args.inflightTtlMs))) {
+      throw new ConvexError({
+        code: "INVALID_TTL",
+        message: "inflightTtlMs must be a positive finite number",
+      });
+    }
+
     const now = Date.now();
     const existing = await ctx.db
       .query("keys")
@@ -820,6 +870,18 @@ export const begin = mutation({
  * won). When `upsertOnMissing` is set, a `missing`/`expired` key is written as
  * `done` anyway — for hosts that would rather record the finished work than drop
  * it. Time is server-sourced.
+ *
+ * **Expiry check order (intentional asymmetry):** `complete` checks the
+ * done-state BEFORE expiry. An expired done key therefore returns
+ * `already_done`, not `expired`. This is intentional: a worker that manages to
+ * call `complete` on a key that is already `done` — even if the done row's grace
+ * window has since lapsed — must not overwrite a prior winner's recorded outcome.
+ * The `expired` reason is reserved for inflight keys whose lease lapsed before
+ * the holder could complete; it does not apply to keys already marked done.
+ *
+ * @throws `ConvexError({ code: "INVALID_TTL" })` when `doneTtlMs` is not a
+ *   positive finite number (≤ 0 or non-finite would produce `expiresAt ≤ now`,
+ *   immediately expiring the done grace window on creation).
  */
 export const complete = mutation({
   args: {
@@ -831,6 +893,13 @@ export const complete = mutation({
   },
   returns: completeResult,
   handler: async (ctx, args) => {
+    if (!(args.doneTtlMs > 0 && isFinite(args.doneTtlMs))) {
+      throw new ConvexError({
+        code: "INVALID_TTL",
+        message: "doneTtlMs must be a positive finite number",
+      });
+    }
+
     const now = Date.now();
     const existing = await ctx.db
       .query("keys")

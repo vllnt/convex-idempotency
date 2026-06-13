@@ -310,3 +310,194 @@ describe("idempotency — client options (custom scope + ttl)", () => {
     expect(await t.mutation(api.example.purgeTenant, {})).toBe(0);
   });
 });
+
+describe("idempotency — effect-once proof (side-effect ran exactly once)", () => {
+  test("calling idempotentIncrement twice with the same key increments the counter exactly once", async () => {
+    const t = setup();
+    const first = await t.mutation(api.example.idempotentIncrement, {
+      idemKey: "eo_1",
+      counterName: "eo_counter",
+    });
+    expect(first.ran).toBe(true);
+    expect(first.value).toBe(1);
+
+    const second = await t.mutation(api.example.idempotentIncrement, {
+      idemKey: "eo_1",
+      counterName: "eo_counter",
+    });
+    expect(second.ran).toBe(false);
+
+    const counter = await t.query(api.example.getCounter, {
+      name: "eo_counter",
+    });
+    expect(counter).toBe(1);
+  });
+});
+
+describe("idempotency — crash-recovery cycle (expire inflight, reclaim, re-execute)", () => {
+  test("crash (no complete) → expire → reclaim fresh → complete → counter is 2 after two fresh claims", async () => {
+    const t = setup();
+
+    const first = await t.mutation(api.example.idempotentIncrement, {
+      idemKey: "cr_1",
+      counterName: "cr_counter",
+      inflightTtlMs: 10,
+    });
+    expect(first.ran).toBe(true);
+    expect(first.value).toBe(1);
+
+    vi.setSystemTime(0);
+
+    await t.mutation(api.example.begin, {
+      key: "cr_crash",
+      inflightTtlMs: 10,
+    });
+
+    vi.setSystemTime(100);
+
+    const reclaim = await t.mutation(api.example.idempotentIncrement, {
+      idemKey: "cr_crash",
+      counterName: "cr_counter",
+      inflightTtlMs: 10,
+    });
+    expect(reclaim.ran).toBe(true);
+    expect(reclaim.value).toBe(2);
+
+    const counter = await t.query(api.example.getCounter, {
+      name: "cr_counter",
+    });
+    expect(counter).toBe(2);
+
+    const replayAgain = await t.mutation(api.example.idempotentIncrement, {
+      idemKey: "cr_crash",
+      counterName: "cr_counter",
+    });
+    expect(replayAgain.ran).toBe(false);
+    expect(await t.query(api.example.getCounter, { name: "cr_counter" })).toBe(
+      2,
+    );
+  });
+});
+
+describe("idempotency — concurrent complete() race", () => {
+  test("two workers completing the same inflight key yield exactly one recorded:true", async () => {
+    const t = setup();
+    await t.mutation(api.example.begin, { key: "race_complete" });
+    const results = await Promise.all([
+      t.mutation(api.example.complete, {
+        key: "race_complete",
+        result: "worker_a",
+      }),
+      t.mutation(api.example.complete, {
+        key: "race_complete",
+        result: "worker_b",
+      }),
+    ]);
+    const recorded = results.filter((r) => r.recorded === true);
+    const alreadyDone = results.filter(
+      (r) => r.recorded === false && r.reason === "already_done",
+    );
+    expect(recorded).toHaveLength(1);
+    expect(alreadyDone).toHaveLength(1);
+  });
+});
+
+describe("idempotency — upsertOnMissing on an already_done key", () => {
+  test("upsertOnMissing:true on an already_done key still returns already_done (no overwrite)", async () => {
+    const t = setup();
+    await t.mutation(api.example.begin, { key: "upsert_done" });
+    await t.mutation(api.example.complete, {
+      key: "upsert_done",
+      result: "original",
+    });
+    const r = await t.mutation(api.example.complete, {
+      key: "upsert_done",
+      result: "overwrite_attempt",
+      upsertOnMissing: true,
+    });
+    expect(r).toEqual({ recorded: false, reason: "already_done" });
+    const state = await t.query(api.example.get, { key: "upsert_done" });
+    expect(state?.result).toBe("original");
+  });
+});
+
+describe("idempotency — expired done key receiving complete() returns already_done", () => {
+  test("complete on an expired done key returns already_done, not expired (asymmetry)", async () => {
+    const t = setup();
+    await t.mutation(api.example.begin, {
+      key: "exp_done_complete",
+      inflightTtlMs: 100,
+    });
+    await t.mutation(api.example.complete, {
+      key: "exp_done_complete",
+      result: "saved",
+      doneTtlMs: 10,
+    });
+    vi.setSystemTime(200);
+    const r = await t.mutation(api.example.complete, {
+      key: "exp_done_complete",
+      result: "attempt2",
+    });
+    expect(r).toEqual({ recorded: false, reason: "already_done" });
+  });
+});
+
+describe("idempotency — invalid TTL rejection (INVALID_TTL)", () => {
+  test("inflightTtlMs:0 throws INVALID_TTL", async () => {
+    const t = setup();
+    await expect(
+      t.mutation(api.example.begin, { key: "bad_ttl", inflightTtlMs: 0 }),
+    ).rejects.toThrow();
+  });
+
+  test("inflightTtlMs:-1 throws INVALID_TTL", async () => {
+    const t = setup();
+    await expect(
+      t.mutation(api.example.begin, { key: "neg_ttl", inflightTtlMs: -1 }),
+    ).rejects.toThrow();
+  });
+
+  test("doneTtlMs:0 throws INVALID_TTL", async () => {
+    const t = setup();
+    await t.mutation(api.example.begin, { key: "bad_done_ttl" });
+    await expect(
+      t.mutation(api.example.complete, {
+        key: "bad_done_ttl",
+        doneTtlMs: 0,
+      }),
+    ).rejects.toThrow();
+  });
+});
+
+describe("idempotency — purge edge cases", () => {
+  test("purge on empty table returns 0", async () => {
+    const t = setup();
+    const removed = await t.mutation(api.example.purge, {
+      before: 9_999_999,
+      batch: 200,
+    });
+    expect(removed).toBe(0);
+  });
+
+  test("purge preserves a non-expired done key", async () => {
+    const t = setup();
+    await t.mutation(api.example.begin, {
+      key: "live_done",
+      inflightTtlMs: 100,
+    });
+    await t.mutation(api.example.complete, {
+      key: "live_done",
+      result: "keep",
+      doneTtlMs: 100_000,
+    });
+    vi.setSystemTime(50);
+    const removed = await t.mutation(api.example.purge, {
+      before: 50,
+      batch: 200,
+    });
+    expect(removed).toBe(0);
+    const state = await t.query(api.example.get, { key: "live_done" });
+    expect(state?.status).toBe("done");
+    expect(state?.result).toBe("keep");
+  });
+});

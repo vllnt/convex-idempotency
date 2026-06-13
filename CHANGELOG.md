@@ -27,3 +27,18 @@ All notable changes to this project are documented here. The format is based on
   delete-and-insert.
 - Bounded, self-rescheduling `purge` (`take(batch)` + scheduler) and a built-in
   daily prune cron (`crons.ts`); idempotent.
+
+### Fixed
+
+- `begin` and `complete` now reject a TTL argument that is ≤ 0 or non-finite with
+  `ConvexError({ code: "INVALID_TTL" })`. A zero or negative `inflightTtlMs` would
+  have produced `expiresAt ≤ now`, immediately expiring the key on creation and
+  breaking the dedup claim window. Same guard added for `doneTtlMs` in `complete`.
+
+### Documented
+
+- Expiry check order asymmetry between `begin` and `complete` is now documented in
+  TSDoc on both mutations. `begin` checks expiry before the done-state (an expired
+  done key re-mints fresh — the grace window elapsed, the operation may re-run).
+  `complete` checks the done-state before expiry (an expired done key returns
+  `already_done` — a prior winner's recorded outcome must not be overwritten).

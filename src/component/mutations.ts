@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { api } from "./_generated/api";
 import { mutation } from "./_generated/server";
 import { beginResult, completeResult, jsonValue } from "./validators";
@@ -9,6 +9,16 @@ import { beginResult, completeResult, jsonValue } from "./validators";
  * force a key to look expired or live. `inflightTtlMs` bounds the inflight lease:
  * a crashed worker self-heals once its short lease lapses, after which the key is
  * re-minted in place (the row id is reused, not deleted and re-inserted).
+ *
+ * **Expiry check order (intentional asymmetry):** `begin` checks expiry BEFORE
+ * the done-state. An expired done key is therefore re-minted `fresh` (the
+ * outcome's grace window has elapsed; the key behaves as never-seen). This is the
+ * correct recovery path — the done grace exists precisely to replay within the
+ * window; outside it the operation may safely re-run.
+ *
+ * @throws `ConvexError({ code: "INVALID_TTL" })` when `inflightTtlMs` is not a
+ *   positive finite number (≤ 0 or non-finite would produce `expiresAt ≤ now`,
+ *   immediately expiring the claim and breaking the dedup window).
  */
 export const begin = mutation({
   args: {
@@ -18,6 +28,13 @@ export const begin = mutation({
   },
   returns: beginResult,
   handler: async (ctx, args) => {
+    if (!(args.inflightTtlMs > 0 && isFinite(args.inflightTtlMs))) {
+      throw new ConvexError({
+        code: "INVALID_TTL",
+        message: "inflightTtlMs must be a positive finite number",
+      });
+    }
+
     const now = Date.now();
     const existing = await ctx.db
       .query("keys")
@@ -67,6 +84,18 @@ export const begin = mutation({
  * won). When `upsertOnMissing` is set, a `missing`/`expired` key is written as
  * `done` anyway — for hosts that would rather record the finished work than drop
  * it. Time is server-sourced.
+ *
+ * **Expiry check order (intentional asymmetry):** `complete` checks the
+ * done-state BEFORE expiry. An expired done key therefore returns
+ * `already_done`, not `expired`. This is intentional: a worker that manages to
+ * call `complete` on a key that is already `done` — even if the done row's grace
+ * window has since lapsed — must not overwrite a prior winner's recorded outcome.
+ * The `expired` reason is reserved for inflight keys whose lease lapsed before
+ * the holder could complete; it does not apply to keys already marked done.
+ *
+ * @throws `ConvexError({ code: "INVALID_TTL" })` when `doneTtlMs` is not a
+ *   positive finite number (≤ 0 or non-finite would produce `expiresAt ≤ now`,
+ *   immediately expiring the done grace window on creation).
  */
 export const complete = mutation({
   args: {
@@ -78,6 +107,13 @@ export const complete = mutation({
   },
   returns: completeResult,
   handler: async (ctx, args) => {
+    if (!(args.doneTtlMs > 0 && isFinite(args.doneTtlMs))) {
+      throw new ConvexError({
+        code: "INVALID_TTL",
+        message: "doneTtlMs must be a positive finite number",
+      });
+    }
+
     const now = Date.now();
     const existing = await ctx.db
       .query("keys")

@@ -20,6 +20,7 @@ its meaning, and auth; this component owns only the dedup ledger.
 - **Split TTLs** — a short **inflight lease** (`inflightTtlMs`, default 60s) so a crashed worker's claim self-heals fast, and a longer **done grace** (`doneTtlMs`, default 24h) after which a key may be re-minted in place.
 - **Lost-claim detection** — `complete` returns a discriminated `{ recorded: true } | { recorded: false, reason }` so a host knows when its work finished but the ledger row was gone (`missing` / `expired` / `already_done`). Opt into `upsertOnMissing` to record it anyway.
 - **Server-sourced time** — expiry is read from the server clock inside every handler; a caller can never supply `now`, so an adversarial clock cannot force a key to look live or expired.
+- **TTL validation** — `inflightTtlMs` and `doneTtlMs` must be positive finite numbers. Passing `0`, a negative value, or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })` before any write, preventing a key from expiring immediately on creation.
 - **Typed result** — `Idempotency<TResult>` types the stored outcome end to end; pass a `resultValidator` to narrow the opaque stored value at the boundary (no unchecked cast). The component stores it opaquely.
 - **Scopes** — global by default, or namespace per tenant / operation type.
 - **Bounded purge + cron** — a built-in daily prune cron sweeps expired keys in bounded batches and self-reschedules until the tail is clean; idempotent, safe to run anytime.

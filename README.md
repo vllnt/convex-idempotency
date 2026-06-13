@@ -1,4 +1,5 @@
 <!-- Badges -->
+[![convex-component](https://img.shields.io/badge/convex-component-EE342F.svg)](https://www.convex.dev/components)
 [![npm](https://img.shields.io/npm/v/@vllnt/convex-idempotency.svg)](https://www.npmjs.com/package/@vllnt/convex-idempotency)
 [![CI](https://github.com/vllnt/convex-idempotency/actions/workflows/ci.yml/badge.svg)](https://github.com/vllnt/convex-idempotency/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/@vllnt/convex-idempotency.svg)](./LICENSE)
@@ -45,7 +46,7 @@ built-in cron (`crons.ts`) prunes expired keys daily.
 pnpm add @vllnt/convex-idempotency
 ```
 
-Peer dependency: `convex@^1.36.1`.
+Peer dependency: `convex@^1.41.0`.
 
 ## Usage
 
@@ -129,6 +130,14 @@ Tests run against the real component runtime via `convex-test` (`@edge-runtime/v
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Author
+
+Built by [bntvllnt](https://github.com/bntvllnt) · [bntvllnt.com](https://bntvllnt.com) · [X @bntvllnt](https://x.com/bntvllnt)
+
+Part of the [@vllnt](https://github.com/vllnt) Convex component fleet — [vllnt.com](https://vllnt.com)
+
+If this is useful, [sponsor the work](https://github.com/sponsors/bntvllnt).
 
 ## License
 

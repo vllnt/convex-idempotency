@@ -8,37 +8,29 @@
 
 Exactly-once idempotency key ledger for retried operations, as a Convex component.
 
-Record an idempotency `key` with a grace TTL; on a replay short-circuit and
-return the prior outcome instead of re-running the work. Domain-neutral: payment
-intents, webhook deliveries, queue consumers, double-submit guards — any
-operation that must run **at most once** per key. The host owns the operation,
-its meaning, and auth; this component owns only the dedup ledger.
+```ts
+const idem = new Idempotency(components.idempotency);
+const claim = await idem.begin(ctx, requestId);   // mints a claim, or short-circuits a replay
+if (claim.state === "done") return claim.result;  // replayed — skip the work
+// ... run the work ...
+await idem.complete(ctx, requestId, result);      // record the outcome for next time
+```
+
+Record an idempotency `key` with a grace TTL; on a replay short-circuit and return the prior outcome
+instead of re-running the work. Domain-neutral: payment intents, webhook deliveries, queue consumers,
+double-submit guards — any operation that must run **at most once** per key.
 
 ## Features
 
-- **Exactly-once** per `(scope, key)` — `begin` mints an inflight claim that rides the Convex mutation transaction; a concurrent retry sees `inflight` with a `retryAfterMs` backoff hint.
+- **Exactly-once** per `(scope, key)` — `begin` mints an inflight claim that rides the mutation transaction; a concurrent retry sees `inflight` with a `retryAfterMs` backoff hint.
 - **Replay** — once `complete` records an outcome, a later `begin` returns `{ state: "done", result }` for a short-circuit.
-- **Split TTLs** — a short **inflight lease** (`inflightTtlMs`, default 60s) so a crashed worker's claim self-heals fast, and a longer **done grace** (`doneTtlMs`, default 24h) after which a key may be re-minted in place.
-- **Lost-claim detection** — `complete` returns a discriminated `{ recorded: true } | { recorded: false, reason }` so a host knows when its work finished but the ledger row was gone (`missing` / `expired` / `already_done`). Opt into `upsertOnMissing` to record it anyway.
-- **Server-sourced time** — expiry is read from the server clock inside every handler; a caller can never supply `now`, so an adversarial clock cannot force a key to look live or expired.
-- **TTL validation** — `inflightTtlMs` and `doneTtlMs` must be positive finite numbers. Passing `0`, a negative value, or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })` before any write, preventing a key from expiring immediately on creation.
-- **Typed result** — `Idempotency<TResult>` types the stored outcome end to end; pass a `resultValidator` to narrow the opaque stored value at the boundary (no unchecked cast). The component stores it opaquely.
+- **Split TTLs** — a short **inflight lease** (default 60s) so a crashed worker's claim self-heals, and a longer **done grace** (default 24h) after which a key may be re-minted.
+- **Lost-claim detection** — `complete` returns `{ recorded: true } | { recorded: false, reason }` so a host knows when its work finished but the row was gone. Opt into `upsertOnMissing`.
+- **Server-sourced time** — expiry is read from the server clock; a caller can't supply `now`, so an adversarial clock can't force a key to look live or expired.
+- **TTL validation** — non-positive or infinite TTLs throw `INVALID_TTL` before any write.
+- **Typed result** — `Idempotency<TResult>` types the stored outcome; a `resultValidator` narrows it at the boundary.
 - **Scopes** — global by default, or namespace per tenant / operation type.
-- **Bounded purge + cron** — a built-in daily prune cron sweeps expired keys in bounded batches and self-reschedules until the tail is clean; idempotent, safe to run anytime.
-
-## Architecture
-
-```
-src/
-├── shared.ts              # constants (component name, default scope, TTLs, batch)
-├── test.ts                # convex-test register() helper
-├── client/                # Idempotency class (the public API)
-└── component/             # schema (keys) + mutations + queries + prune cron
-```
-
-Sandboxed table: `keys {key, scope, status, result?, expiresAt}` — unique per
-`(scope, key)`, indexed for lookup (`by_scope_key`) and sweep (`by_expires`). A
-built-in cron (`crons.ts`) prunes expired keys daily.
+- **Bounded purge + cron** — a daily cron sweeps expired keys in batches and self-reschedules until clean.
 
 ## Installation
 
@@ -88,8 +80,6 @@ export const charge = mutation({
 
 ## API Reference
 
-See [docs/API.md](docs/API.md). Summary:
-
 | Method | Kind | Result |
 |--------|------|--------|
 | `begin(ctx, key, opts?)` | mutation | `{ state: "fresh" } \| { state: "inflight"; expiresAt; retryAfterMs } \| { state: "done"; result? }` |
@@ -97,26 +87,19 @@ See [docs/API.md](docs/API.md). Summary:
 | `get(ctx, key, scope?)` | query | `{ status, result?, expiresAt } \| null` |
 | `purge(ctx, opts?)` | mutation | `number` (keys removed in the first bounded pass) |
 
-`begin` opts: `{ scope?; inflightTtlMs? }`. `complete` opts:
-`{ scope?; doneTtlMs?; upsertOnMissing? }`. `purge` opts: `{ before?; batch? }`.
-Client options: `new Idempotency(component, { defaultScope = "global",
-defaultInflightTtlMs = 60_000, defaultDoneTtlMs = 86_400_000, upsertOnMissing =
-false, resultValidator? })`.
+Full reference: [docs/API.md](docs/API.md).
 
-## Security Model
+## React
 
-The component is **auth-agnostic**: it never authenticates or authorizes. The
-host resolves identity, decides whether a caller may run an operation, and passes
-an opaque `key`. Component tables are sandboxed — the host reaches them only
-through the exported functions. `key`, `scope`, and the stored `result` are
-opaque to the component; it never inspects or de-references them.
+Backend-only — no `./react` entry. Pure infra dedup with no user-facing reactive surface.
 
-**Time is server-sourced.** Expiry is read from `Date.now()` inside every handler
-— the API takes no caller-supplied `now`, so a hostile or skewed client clock
-cannot make a key appear live (to hijack a replay) or expired (to bypass the
-dedup). The host may narrow the opaque stored `result` with a `resultValidator`,
-applied at the client boundary on both write (`complete`) and read
-(`begin`/`get`).
+## Security
+
+- Auth-agnostic — the host resolves identity and decides who may run an operation.
+- Tables sandboxed — reached only through the exported functions.
+- Server-sourced expiry — a skewed client clock can't hijack a replay or bypass dedup; `key` / `scope` / `result` stay opaque.
+
+See [docs/API.md](docs/API.md).
 
 ## Testing
 

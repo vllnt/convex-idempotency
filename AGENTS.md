@@ -11,7 +11,12 @@ Convex agent skills for common tasks can be installed by running `npx convex ai-
 # @vllnt/convex-idempotency
 
 Exactly-once idempotency key ledger for retried operations, as a Convex component. It follows the
-vllnt Component Standard (see the `convex-components` hub `.claude/rules/component-standard.md`).
+vllnt Component Standard (see the `oss-packages` hub `AGENTS.md`).
+
+## Agent instructions
+
+`AGENTS.md` is the sole agent-instruction source for this repository. Do not add
+`CLAUDE.md` or `.claude` content.
 
 ## Architecture
 
@@ -112,3 +117,9 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
 | Any change | `pnpm generate:llms` to keep `llms-full.txt` current |
 
 Grep old values before committing (e.g. `git grep "1.36.1"` → must be empty).
+
+## Generated code
+
+- Every `**/_generated/**` file is owned exclusively by Convex CLI codegen.
+- Never create, edit, lint, or format generated files manually.
+- Run `pnpm codegen` to regenerate them and commit the generated output unchanged.

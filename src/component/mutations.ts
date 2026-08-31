@@ -56,7 +56,7 @@ export const begin = mutation({
     }
 
     if (existing.expiresAt <= now) {
-      await ctx.db.patch(existing._id, {
+      await ctx.db.patch("keys", existing._id, {
         status: "inflight",
         result: undefined,
         expiresAt,
@@ -144,7 +144,7 @@ export const complete = mutation({
 
     if (existing.expiresAt <= now) {
       if (args.upsertOnMissing) {
-        await ctx.db.patch(existing._id, {
+        await ctx.db.patch("keys", existing._id, {
           status: "done",
           result: args.result,
           expiresAt,
@@ -154,7 +154,7 @@ export const complete = mutation({
       return { recorded: false as const, reason: "expired" as const };
     }
 
-    await ctx.db.patch(existing._id, {
+    await ctx.db.patch("keys", existing._id, {
       status: "done",
       result: args.result,
       expiresAt,
@@ -182,7 +182,7 @@ export const purge = mutation({
       .withIndex("by_expires", (q) => q.lt("expiresAt", before))
       .take(args.batch);
     for (const row of stale) {
-      await ctx.db.delete(row._id);
+      await ctx.db.delete("keys", row._id);
     }
     if (stale.length === args.batch) {
       await ctx.scheduler.runAfter(0, api.mutations.purge, {

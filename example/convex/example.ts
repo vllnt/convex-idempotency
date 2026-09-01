@@ -36,7 +36,7 @@ const strictIdem = new Idempotency<{ ok: boolean }>(components.idempotency, {
 });
 
 const beginResult = v.union(
-  v.object({ state: v.literal("fresh") }),
+  v.object({ state: v.literal("fresh"), claimId: v.string() }),
   v.object({
     state: v.literal("inflight"),
     expiresAt: v.number(),
@@ -52,6 +52,7 @@ const completeResult = v.union(
     reason: v.union(
       v.literal("missing"),
       v.literal("expired"),
+      v.literal("superseded"),
       v.literal("already_done"),
     ),
   }),
@@ -81,6 +82,7 @@ export const complete = mutation({
   args: {
     key: v.string(),
     result: v.optional(v.any()),
+    claimId: v.optional(v.string()),
     scope: v.optional(v.string()),
     doneTtlMs: v.optional(v.number()),
     upsertOnMissing: v.optional(v.boolean()),
@@ -89,6 +91,7 @@ export const complete = mutation({
   handler: (ctx, a) =>
     idem.complete(ctx, a.key, a.result, {
       scope: a.scope,
+      claimId: a.claimId,
       doneTtlMs: a.doneTtlMs,
       upsertOnMissing: a.upsertOnMissing,
     }),
@@ -133,9 +136,9 @@ export const beginStrict = mutation({
 });
 
 export const completeStrict = mutation({
-  args: { key: v.string(), result: v.any() },
+  args: { key: v.string(), result: v.any(), claimId: v.optional(v.string()) },
   returns: completeResult,
-  handler: (ctx, a) => strictIdem.complete(ctx, a.key, a.result),
+  handler: (ctx, a) => strictIdem.complete(ctx, a.key, a.result, { claimId: a.claimId }),
 });
 
 export const getStrict = query({
@@ -216,7 +219,7 @@ export const idempotentIncrement = mutation({
     } else {
       await ctx.db.patch(existing._id, { value: next });
     }
-    await idem.complete(ctx, idemKey, next, { doneTtlMs });
+    await idem.complete(ctx, idemKey, next, { claimId: claim.claimId, doneTtlMs });
     return { ran: true as const, value: next };
   },
 });

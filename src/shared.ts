@@ -19,3 +19,6 @@ export const DEFAULT_DONE_TTL_MS = 86_400_000;
 
 /** Default page size for a `purge` pass before the sweep self-reschedules. */
 export const DEFAULT_PURGE_BATCH = 200;
+
+/** Maximum rows deleted in one purge transaction. */
+export const MAX_PURGE_BATCH = 500;

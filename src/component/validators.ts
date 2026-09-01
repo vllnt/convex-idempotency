@@ -20,7 +20,7 @@ export const jsonValue = v.any();
  * the recorded outcome for a short-circuit replay.
  */
 export const beginResult = v.union(
-  v.object({ state: v.literal("fresh") }),
+  v.object({ state: v.literal("fresh"), claimId: v.string() }),
   v.object({
     state: v.literal("inflight"),
     expiresAt: v.number(),
@@ -43,6 +43,7 @@ export const completeResult = v.union(
     reason: v.union(
       v.literal("missing"),
       v.literal("expired"),
+      v.literal("superseded"),
       v.literal("already_done"),
     ),
   }),

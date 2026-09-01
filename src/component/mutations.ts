@@ -1,7 +1,17 @@
 import { ConvexError, v } from "convex/values";
 import { api } from "./_generated/api";
 import { mutation } from "./_generated/server";
+import { MAX_PURGE_BATCH } from "../shared";
 import { beginResult, completeResult, jsonValue } from "./validators";
+
+function validateBatch(batch: number): void {
+  if (!Number.isFinite(batch) || !Number.isInteger(batch) || batch < 1 || batch > MAX_PURGE_BATCH) {
+    throw new ConvexError({
+      code: "INVALID_BATCH",
+      message: `batch must be an integer between 1 and ${MAX_PURGE_BATCH}`,
+    });
+  }
+}
 
 /**
  * Claim `key` within `scope`. Time is read from the server (`Date.now()`) inside
@@ -46,22 +56,29 @@ export const begin = mutation({
     const expiresAt = now + args.inflightTtlMs;
 
     if (existing === null) {
+      const claimId = crypto.randomUUID();
       await ctx.db.insert("keys", {
         key: args.key,
         scope: args.scope,
         status: "inflight",
+        claimId,
+        claimGeneration: 1,
         expiresAt,
       });
-      return { state: "fresh" as const };
+      return { state: "fresh" as const, claimId };
     }
 
     if (existing.expiresAt <= now) {
+      const claimId = crypto.randomUUID();
       await ctx.db.patch("keys", existing._id, {
         status: "inflight",
+        claimId,
+        // v8 ignore next -- migration fallback for rows written before claim generations existed
+        claimGeneration: (existing.claimGeneration ?? 1) + 1,
         result: undefined,
         expiresAt,
       });
-      return { state: "fresh" as const };
+      return { state: "fresh" as const, claimId };
     }
 
     if (existing.status === "done") {
@@ -102,6 +119,7 @@ export const complete = mutation({
     key: v.string(),
     scope: v.string(),
     result: v.optional(jsonValue),
+    claimId: v.optional(v.string()),
     doneTtlMs: v.number(),
     upsertOnMissing: v.boolean(),
   },
@@ -130,6 +148,8 @@ export const complete = mutation({
           key: args.key,
           scope: args.scope,
           status: "done",
+          claimId: args.claimId ?? crypto.randomUUID(),
+          claimGeneration: 1,
           result: args.result,
           expiresAt,
         });
@@ -140,6 +160,13 @@ export const complete = mutation({
 
     if (existing.status === "done") {
       return { recorded: false as const, reason: "already_done" as const };
+    }
+
+    if (
+      (args.claimId !== undefined && args.claimId !== existing.claimId) ||
+      (args.claimId === undefined && (existing.claimGeneration ?? 1) > 1)
+    ) {
+      return { recorded: false as const, reason: "superseded" as const };
     }
 
     if (existing.expiresAt <= now) {
@@ -176,6 +203,10 @@ export const purge = mutation({
   args: { before: v.optional(v.number()), batch: v.number() },
   returns: v.number(),
   handler: async (ctx, args) => {
+    validateBatch(args.batch);
+    if (args.before !== undefined && !Number.isFinite(args.before)) {
+      throw new ConvexError({ code: "INVALID_BEFORE", message: "before must be finite" });
+    }
     const before = args.before ?? Date.now();
     const stale = await ctx.db
       .query("keys")

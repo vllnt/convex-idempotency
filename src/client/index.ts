@@ -23,7 +23,7 @@ import {
  * the host `resultValidator` over it at its typed boundary.
  */
 type RawBegin =
-  | { state: "fresh" }
+  | { state: "fresh"; claimId: string }
   | { state: "inflight"; expiresAt: number; retryAfterMs: number }
   | { state: "done"; result?: unknown };
 
@@ -48,6 +48,7 @@ export interface IdempotencyComponent {
         key: string;
         scope: string;
         result?: unknown;
+        claimId?: string;
         doneTtlMs: number;
         upsertOnMissing: boolean;
       },
@@ -97,6 +98,8 @@ interface BeginOptions {
 /** Per-call overrides for `scope`, the done grace window, and lost-claim upsert. */
 interface CompleteOptions {
   scope?: string;
+  /** Fencing token returned by the successful `begin` claim. */
+  claimId?: string;
   doneTtlMs?: number;
   upsertOnMissing?: boolean;
 }
@@ -119,7 +122,7 @@ interface CompleteOptions {
  * if (r.state === "done") return r.result;                  // typed replay
  * if (r.state === "inflight") throw new Error(`retry in ${r.retryAfterMs}ms`);
  * const out = await doWork();                               // r.state === "fresh"
- * const done = await idem.complete(ctx, requestId, out);
+ * const done = await idem.complete(ctx, requestId, out, { claimId: r.claimId });
  * if (!done.recorded) log.warn("claim lost", done.reason);  // work ran, row gone
  * ```
  */
@@ -201,6 +204,7 @@ export class Idempotency<TResult = unknown> {
       key,
       scope: this.scopeOf(opts.scope),
       result: validated,
+      claimId: opts.claimId,
       doneTtlMs: opts.doneTtlMs ?? this.defaultDoneTtlMs,
       upsertOnMissing: opts.upsertOnMissing ?? this.defaultUpsertOnMissing,
     });

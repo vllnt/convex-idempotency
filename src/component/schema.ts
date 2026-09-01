@@ -13,6 +13,8 @@ export default defineSchema({
     key: v.string(),
     scope: v.string(),
     status: v.union(v.literal("inflight"), v.literal("done")),
+    claimId: v.optional(v.string()),
+    claimGeneration: v.optional(v.number()),
     result: v.optional(jsonValue),
     expiresAt: v.number(),
   })

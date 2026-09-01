@@ -90,8 +90,8 @@ export const charge = mutation({
 
 | Method | Kind | Result |
 |--------|------|--------|
-| `begin(ctx, key, opts?)` | mutation | `{ state: "fresh" } \| { state: "inflight"; expiresAt; retryAfterMs } \| { state: "done"; result? }` |
-| `complete(ctx, key, result?, opts?)` | mutation | `{ recorded: true } \| { recorded: false; reason: "missing" \| "expired" \| "already_done" }` |
+| `begin(ctx, key, opts?)` | mutation | `{ state: "fresh"; claimId } \| { state: "inflight"; expiresAt; retryAfterMs } \| { state: "done"; result? }` |
+| `complete(ctx, key, result?, opts?)` | mutation | `{ recorded: true } \| { recorded: false; reason: "missing" \| "expired" \| "superseded" \| "already_done" }` |
 | `get(ctx, key, scope?)` | query | `{ status, result?, expiresAt } \| null` |
 | `purge(ctx, opts?)` | mutation | `number` (keys removed in the first bounded pass) |
 
@@ -146,6 +146,20 @@ All notable changes to this project are documented here. The format is based on
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Fixed
+
+- Fence re-minted leases with opaque claim IDs so a stale worker cannot overwrite the newer
+  claim's result, including when lost-claim upsert is enabled.
+- Reject invalid purge batches and non-finite cutoffs before they can create scheduler loops or
+  oversized transactions.
+
+### Changed
+
+- Treat Convex `_generated` output as CLI-owned, exclude it from formatting, and expose a
+  dedicated codegen script.
+- Refresh all direct dependencies to their latest compatible releases for canary validation.
+- Require `convex@^1.45.0` and update `convex-test` to `^0.0.56`.
 
 ## [0.1.0] - 2026-06-12
 
@@ -229,8 +243,8 @@ value returned by `begin` (`done` replay) and `get`. It must return a typed
 
 Claim `key` for an operation. The discriminated result is:
 
-- `{ state: "fresh" }` — the key was just minted (or a prior claim had expired and
-  was re-minted in place); the caller should perform the work and then call
+- `{ state: "fresh"; claimId }` — the key was just minted (or a prior claim had expired and
+  was re-minted in place); the caller should perform the work and pass the opaque `claimId` to
   `complete`.
 - `{ state: "inflight"; expiresAt; retryAfterMs }` — another attempt holds an
   unexpired claim; do not re-run. `expiresAt` is when the lease frees and
@@ -252,7 +266,7 @@ negative TTL would produce `expiresAt ≤ now`, immediately expiring the claim.
 
 ### `complete(ctx, key, result?, opts?) → CompleteResult`
 
-`opts`: `{ scope?: string; doneTtlMs?: number; upsertOnMissing?: boolean }`.
+`opts`: `{ scope?: string; claimId?: string; doneTtlMs?: number; upsertOnMissing?: boolean }`.
 
 Mark `key` `done`, recording `result` and extending the grace window
 (`expiresAt = now + doneTtlMs`). The discriminated result lets a host detect a
@@ -260,12 +274,14 @@ lost claim:
 
 - `{ recorded: true }` — the outcome was written.
 - `{ recorded: false; reason }` — the claim was lost; `reason` is `missing` (no
-  key), `expired` (the inflight lease lapsed before completion), or `already_done`
-  (a prior attempt won).
+  key), `expired` (the inflight lease lapsed before completion), `superseded` (a newer claim
+  replaced this worker's lease), or `already_done` (a prior attempt won).
 
 When `upsertOnMissing` is set, a `missing`/`expired` key is written as `done`
 anyway — recording finished work rather than dropping it (returns
-`{ recorded: true }`).
+`{ recorded: true }`). A `superseded` claim is never upserted or allowed to overwrite the
+current lease. For migration compatibility, an omitted claim ID is accepted only for the first
+claim generation; after any re-mint it fails closed as `superseded`.
 
 **Expiry check order:** `complete` checks the done-state **before** expiry. An
 expired done key therefore returns `already_done`, not `expired` — a prior
@@ -279,7 +295,7 @@ or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 ### `purge(ctx, opts?) → number`
 
 `opts`: `{ before?: number; batch?: number }` (defaults: `before = Date.now()`,
-`batch = 200`).
+`batch = 200`; valid batch range: 1–500).
 
 Delete up to `batch` keys whose `expiresAt < before`, oldest first via the
 `by_expires` index, and return the count removed in the first pass. If a full
@@ -324,6 +340,9 @@ export const DEFAULT_DONE_TTL_MS = 86_400_000;
 /** Default page size for a `purge` pass before the sweep self-reschedules. */
 export const DEFAULT_PURGE_BATCH = 200;
 
+/** Maximum rows deleted in one purge transaction. */
+export const MAX_PURGE_BATCH = 500;
+
 ```
 
 ---
@@ -348,6 +367,8 @@ export type BeginResult<TResult> =
   | {
       /** The key was just minted; do the work, then call `complete`. */
       state: "fresh";
+      /** Opaque fencing token that must be passed to `complete`. */
+      claimId: string;
     }
   | {
       /** Another attempt holds the key; do not re-run. */
@@ -377,7 +398,7 @@ export type CompleteResult =
        * `missing` — no key for this id/scope. `expired` — the inflight lease
        * lapsed before completion. `already_done` — a prior attempt won the race.
        */
-      reason: "missing" | "expired" | "already_done";
+      reason: "missing" | "expired" | "superseded" | "already_done";
     };
 
 /** Construction options for the {@link Idempotency} client. */
@@ -451,7 +472,7 @@ import {
  * the host `resultValidator` over it at its typed boundary.
  */
 type RawBegin =
-  | { state: "fresh" }
+  | { state: "fresh"; claimId: string }
   | { state: "inflight"; expiresAt: number; retryAfterMs: number }
   | { state: "done"; result?: unknown };
 
@@ -476,6 +497,7 @@ export interface IdempotencyComponent {
         key: string;
         scope: string;
         result?: unknown;
+        claimId?: string;
         doneTtlMs: number;
         upsertOnMissing: boolean;
       },
@@ -525,6 +547,8 @@ interface BeginOptions {
 /** Per-call overrides for `scope`, the done grace window, and lost-claim upsert. */
 interface CompleteOptions {
   scope?: string;
+  /** Fencing token returned by the successful `begin` claim. */
+  claimId?: string;
   doneTtlMs?: number;
   upsertOnMissing?: boolean;
 }
@@ -547,7 +571,7 @@ interface CompleteOptions {
  * if (r.state === "done") return r.result;                  // typed replay
  * if (r.state === "inflight") throw new Error(`retry in ${r.retryAfterMs}ms`);
  * const out = await doWork();                               // r.state === "fresh"
- * const done = await idem.complete(ctx, requestId, out);
+ * const done = await idem.complete(ctx, requestId, out, { claimId: r.claimId });
  * if (!done.recorded) log.warn("claim lost", done.reason);  // work ran, row gone
  * ```
  */
@@ -629,6 +653,7 @@ export class Idempotency<TResult = unknown> {
       key,
       scope: this.scopeOf(opts.scope),
       result: validated,
+      claimId: opts.claimId,
       doneTtlMs: opts.doneTtlMs ?? this.defaultDoneTtlMs,
       upsertOnMissing: opts.upsertOnMissing ?? this.defaultUpsertOnMissing,
     });
@@ -700,6 +725,8 @@ export default defineSchema({
     key: v.string(),
     scope: v.string(),
     status: v.union(v.literal("inflight"), v.literal("done")),
+    claimId: v.optional(v.string()),
+    claimGeneration: v.optional(v.number()),
     result: v.optional(jsonValue),
     expiresAt: v.number(),
   })
@@ -736,7 +763,7 @@ export const jsonValue = v.any();
  * the recorded outcome for a short-circuit replay.
  */
 export const beginResult = v.union(
-  v.object({ state: v.literal("fresh") }),
+  v.object({ state: v.literal("fresh"), claimId: v.string() }),
   v.object({
     state: v.literal("inflight"),
     expiresAt: v.number(),
@@ -759,6 +786,7 @@ export const completeResult = v.union(
     reason: v.union(
       v.literal("missing"),
       v.literal("expired"),
+      v.literal("superseded"),
       v.literal("already_done"),
     ),
   }),
@@ -781,7 +809,17 @@ export const keyState = v.object({
 import { ConvexError, v } from "convex/values";
 import { api } from "./_generated/api";
 import { mutation } from "./_generated/server";
+import { MAX_PURGE_BATCH } from "../shared";
 import { beginResult, completeResult, jsonValue } from "./validators";
+
+function validateBatch(batch: number): void {
+  if (!Number.isFinite(batch) || !Number.isInteger(batch) || batch < 1 || batch > MAX_PURGE_BATCH) {
+    throw new ConvexError({
+      code: "INVALID_BATCH",
+      message: `batch must be an integer between 1 and ${MAX_PURGE_BATCH}`,
+    });
+  }
+}
 
 /**
  * Claim `key` within `scope`. Time is read from the server (`Date.now()`) inside
@@ -826,22 +864,29 @@ export const begin = mutation({
     const expiresAt = now + args.inflightTtlMs;
 
     if (existing === null) {
+      const claimId = crypto.randomUUID();
       await ctx.db.insert("keys", {
         key: args.key,
         scope: args.scope,
         status: "inflight",
+        claimId,
+        claimGeneration: 1,
         expiresAt,
       });
-      return { state: "fresh" as const };
+      return { state: "fresh" as const, claimId };
     }
 
     if (existing.expiresAt <= now) {
-      await ctx.db.patch(existing._id, {
+      const claimId = crypto.randomUUID();
+      await ctx.db.patch("keys", existing._id, {
         status: "inflight",
+        claimId,
+        // v8 ignore next -- migration fallback for rows written before claim generations existed
+        claimGeneration: (existing.claimGeneration ?? 1) + 1,
         result: undefined,
         expiresAt,
       });
-      return { state: "fresh" as const };
+      return { state: "fresh" as const, claimId };
     }
 
     if (existing.status === "done") {
@@ -882,6 +927,7 @@ export const complete = mutation({
     key: v.string(),
     scope: v.string(),
     result: v.optional(jsonValue),
+    claimId: v.optional(v.string()),
     doneTtlMs: v.number(),
     upsertOnMissing: v.boolean(),
   },
@@ -910,6 +956,8 @@ export const complete = mutation({
           key: args.key,
           scope: args.scope,
           status: "done",
+          claimId: args.claimId ?? crypto.randomUUID(),
+          claimGeneration: 1,
           result: args.result,
           expiresAt,
         });
@@ -922,9 +970,16 @@ export const complete = mutation({
       return { recorded: false as const, reason: "already_done" as const };
     }
 
+    if (
+      (args.claimId !== undefined && args.claimId !== existing.claimId) ||
+      (args.claimId === undefined && (existing.claimGeneration ?? 1) > 1)
+    ) {
+      return { recorded: false as const, reason: "superseded" as const };
+    }
+
     if (existing.expiresAt <= now) {
       if (args.upsertOnMissing) {
-        await ctx.db.patch(existing._id, {
+        await ctx.db.patch("keys", existing._id, {
           status: "done",
           result: args.result,
           expiresAt,
@@ -934,7 +989,7 @@ export const complete = mutation({
       return { recorded: false as const, reason: "expired" as const };
     }
 
-    await ctx.db.patch(existing._id, {
+    await ctx.db.patch("keys", existing._id, {
       status: "done",
       result: args.result,
       expiresAt,
@@ -956,13 +1011,17 @@ export const purge = mutation({
   args: { before: v.optional(v.number()), batch: v.number() },
   returns: v.number(),
   handler: async (ctx, args) => {
+    validateBatch(args.batch);
+    if (args.before !== undefined && !Number.isFinite(args.before)) {
+      throw new ConvexError({ code: "INVALID_BEFORE", message: "before must be finite" });
+    }
     const before = args.before ?? Date.now();
     const stale = await ctx.db
       .query("keys")
       .withIndex("by_expires", (q) => q.lt("expiresAt", before))
       .take(args.batch);
     for (const row of stale) {
-      await ctx.db.delete(row._id);
+      await ctx.db.delete("keys", row._id);
     }
     if (stale.length === args.batch) {
       await ctx.scheduler.runAfter(0, api.mutations.purge, {

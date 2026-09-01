@@ -38,8 +38,8 @@ value returned by `begin` (`done` replay) and `get`. It must return a typed
 
 Claim `key` for an operation. The discriminated result is:
 
-- `{ state: "fresh" }` — the key was just minted (or a prior claim had expired and
-  was re-minted in place); the caller should perform the work and then call
+- `{ state: "fresh"; claimId }` — the key was just minted (or a prior claim had expired and
+  was re-minted in place); the caller should perform the work and pass the opaque `claimId` to
   `complete`.
 - `{ state: "inflight"; expiresAt; retryAfterMs }` — another attempt holds an
   unexpired claim; do not re-run. `expiresAt` is when the lease frees and
@@ -61,7 +61,7 @@ negative TTL would produce `expiresAt ≤ now`, immediately expiring the claim.
 
 ### `complete(ctx, key, result?, opts?) → CompleteResult`
 
-`opts`: `{ scope?: string; doneTtlMs?: number; upsertOnMissing?: boolean }`.
+`opts`: `{ scope?: string; claimId?: string; doneTtlMs?: number; upsertOnMissing?: boolean }`.
 
 Mark `key` `done`, recording `result` and extending the grace window
 (`expiresAt = now + doneTtlMs`). The discriminated result lets a host detect a
@@ -69,12 +69,14 @@ lost claim:
 
 - `{ recorded: true }` — the outcome was written.
 - `{ recorded: false; reason }` — the claim was lost; `reason` is `missing` (no
-  key), `expired` (the inflight lease lapsed before completion), or `already_done`
-  (a prior attempt won).
+  key), `expired` (the inflight lease lapsed before completion), `superseded` (a newer claim
+  replaced this worker's lease), or `already_done` (a prior attempt won).
 
 When `upsertOnMissing` is set, a `missing`/`expired` key is written as `done`
 anyway — recording finished work rather than dropping it (returns
-`{ recorded: true }`).
+`{ recorded: true }`). A `superseded` claim is never upserted or allowed to overwrite the
+current lease. For migration compatibility, an omitted claim ID is accepted only for the first
+claim generation; after any re-mint it fails closed as `superseded`.
 
 **Expiry check order:** `complete` checks the done-state **before** expiry. An
 expired done key therefore returns `already_done`, not `expired` — a prior
@@ -88,7 +90,7 @@ or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 ### `purge(ctx, opts?) → number`
 
 `opts`: `{ before?: number; batch?: number }` (defaults: `before = Date.now()`,
-`batch = 200`).
+`batch = 200`; valid batch range: 1–500).
 
 Delete up to `batch` keys whose `expiresAt < before`, oldest first via the
 `by_expires` index, and return the count removed in the first pass. If a full

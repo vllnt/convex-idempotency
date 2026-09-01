@@ -29,7 +29,7 @@ describe("idempotency — begin / complete lifecycle", () => {
   test("first begin mints a fresh inflight key (happy path)", async () => {
     const t = setup();
     const r = await t.mutation(api.example.begin, { key: "op_1" });
-    expect(r).toEqual({ state: "fresh" });
+    expect(r).toMatchObject({ state: "fresh" });
     const state = await t.query(api.example.get, { key: "op_1" });
     expect(state?.status).toBe("inflight");
     expect(state?.result).toBeUndefined();
@@ -174,14 +174,14 @@ describe("idempotency — expiry (deterministic server time)", () => {
       key: "op_exp",
       inflightTtlMs: 1,
     });
-    expect(first).toEqual({ state: "fresh" });
+    expect(first).toMatchObject({ state: "fresh" });
     const rowBefore = await t.query(api.example.get, { key: "op_exp" });
     vi.setSystemTime(5); // expiresAt 1 <= 5 → expired
     const second = await t.mutation(api.example.begin, {
       key: "op_exp",
       inflightTtlMs: 1,
     });
-    expect(second).toEqual({ state: "fresh" });
+    expect(second).toMatchObject({ state: "fresh" });
     const rowAfter = await t.query(api.example.get, { key: "op_exp" });
     // reused in place: fresh inflight lease, no stale result
     expect(rowAfter?.status).toBe("inflight");
@@ -203,7 +203,56 @@ describe("idempotency — expiry (deterministic server time)", () => {
       key: "op_done_exp",
       inflightTtlMs: 10,
     });
-    expect(r).toEqual({ state: "fresh" });
+    expect(r).toMatchObject({ state: "fresh" });
+  });
+});
+
+describe("idempotency — lease fencing", () => {
+  test("a stale worker cannot complete after an expired claim is re-minted", async () => {
+    const t = setup();
+    const first = await t.mutation(api.example.begin, {
+      key: "fenced",
+      inflightTtlMs: 10,
+    });
+    expect(first.state).toBe("fresh");
+    if (first.state !== "fresh") throw new Error("expected fresh claim");
+
+    vi.setSystemTime(11);
+    const second = await t.mutation(api.example.begin, {
+      key: "fenced",
+      inflightTtlMs: 100,
+    });
+    expect(second.state).toBe("fresh");
+    if (second.state !== "fresh") throw new Error("expected fresh claim");
+    expect(second.claimId).not.toBe(first.claimId);
+
+    expect(
+      await t.mutation(api.example.complete, {
+        key: "fenced",
+        claimId: first.claimId,
+        result: "stale",
+        upsertOnMissing: true,
+      }),
+    ).toEqual({ recorded: false, reason: "superseded" });
+    expect(
+      await t.mutation(api.example.complete, {
+        key: "fenced",
+        claimId: second.claimId,
+        result: "winner",
+      }),
+    ).toEqual({ recorded: true });
+    expect((await t.query(api.example.get, { key: "fenced" }))?.result).toBe("winner");
+  });
+
+  test("legacy completion without a claim token fails closed after re-mint", async () => {
+    const t = setup();
+    await t.mutation(api.example.begin, { key: "legacy", inflightTtlMs: 1 });
+    vi.setSystemTime(2);
+    await t.mutation(api.example.begin, { key: "legacy", inflightTtlMs: 100 });
+    expect(await t.mutation(api.example.complete, { key: "legacy" })).toEqual({
+      recorded: false,
+      reason: "superseded",
+    });
   });
 });
 
@@ -290,7 +339,7 @@ describe("idempotency — scopes", () => {
     const t = setup();
     await t.mutation(api.example.begin, { key: "shared", scope: "a" });
     const r = await t.mutation(api.example.begin, { key: "shared", scope: "b" });
-    expect(r).toEqual({ state: "fresh" });
+    expect(r).toMatchObject({ state: "fresh" });
     expect(
       (await t.query(api.example.get, { key: "shared", scope: "a" }))?.status,
     ).toBe("inflight");
@@ -302,7 +351,7 @@ describe("idempotency — client options (custom scope + ttl)", () => {
   test("tenant client uses its default scope and ttls", async () => {
     const t = setup();
     const r = await t.mutation(api.example.beginTenant, { key: "t_1" });
-    expect(r).toEqual({ state: "fresh" });
+    expect(r).toMatchObject({ state: "fresh" });
     expect(
       (await t.query(api.example.getTenant, { key: "t_1" }))?.status,
     ).toBe("inflight");
@@ -470,6 +519,20 @@ describe("idempotency — invalid TTL rejection (INVALID_TTL)", () => {
 });
 
 describe("idempotency — purge edge cases", () => {
+  test.each([Number.NaN, 0, -1, 1.5, 501])("rejects invalid batch %s", async (batch) => {
+    const t = setup();
+    await expect(t.mutation(api.example.purge, { batch })).rejects.toThrow(
+      /INVALID_BATCH|integer between/,
+    );
+  });
+
+  test("rejects a non-finite cutoff", async () => {
+    const t = setup();
+    await expect(
+      t.mutation(api.example.purge, { before: Number.NaN }),
+    ).rejects.toThrow(/INVALID_BEFORE|finite/);
+  });
+
   test("purge on empty table returns 0", async () => {
     const t = setup();
     const removed = await t.mutation(api.example.purge, {

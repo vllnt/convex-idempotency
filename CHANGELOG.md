@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- Fence re-minted leases with opaque claim IDs so a stale worker cannot overwrite the newer
+  claim's result, including when lost-claim upsert is enabled.
+- Reject invalid purge batches and non-finite cutoffs before they can create scheduler loops or
+  oversized transactions.
+
 ### Changed
 
 - Treat Convex `_generated` output as CLI-owned, exclude it from formatting, and expose a

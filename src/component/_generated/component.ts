@@ -28,7 +28,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         { inflightTtlMs: number; key: string; scope: string },
-        | { state: "fresh" }
+        | { claimId: string; state: "fresh" }
         | { expiresAt: number; retryAfterMs: number; state: "inflight" }
         | { result?: any; state: "done" },
         Name
@@ -37,6 +37,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "mutation",
         "internal",
         {
+          claimId?: string;
           doneTtlMs: number;
           key: string;
           result?: any;
@@ -44,7 +45,10 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           upsertOnMissing: boolean;
         },
         | { recorded: true }
-        | { reason: "missing" | "expired" | "already_done"; recorded: false },
+        | {
+            reason: "missing" | "expired" | "superseded" | "already_done";
+            recorded: false;
+          },
         Name
       >;
       purge: FunctionReference<

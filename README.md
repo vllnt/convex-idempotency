@@ -82,8 +82,8 @@ export const charge = mutation({
 
 | Method | Kind | Result |
 |--------|------|--------|
-| `begin(ctx, key, opts?)` | mutation | `{ state: "fresh" } \| { state: "inflight"; expiresAt; retryAfterMs } \| { state: "done"; result? }` |
-| `complete(ctx, key, result?, opts?)` | mutation | `{ recorded: true } \| { recorded: false; reason: "missing" \| "expired" \| "already_done" }` |
+| `begin(ctx, key, opts?)` | mutation | `{ state: "fresh"; claimId } \| { state: "inflight"; expiresAt; retryAfterMs } \| { state: "done"; result? }` |
+| `complete(ctx, key, result?, opts?)` | mutation | `{ recorded: true } \| { recorded: false; reason: "missing" \| "expired" \| "superseded" \| "already_done" }` |
 | `get(ctx, key, scope?)` | query | `{ status, result?, expiresAt } \| null` |
 | `purge(ctx, opts?)` | mutation | `number` (keys removed in the first bounded pass) |
 

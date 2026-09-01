@@ -15,6 +15,8 @@ export type BeginResult<TResult> =
   | {
       /** The key was just minted; do the work, then call `complete`. */
       state: "fresh";
+      /** Opaque fencing token that must be passed to `complete`. */
+      claimId: string;
     }
   | {
       /** Another attempt holds the key; do not re-run. */
@@ -44,7 +46,7 @@ export type CompleteResult =
        * `missing` — no key for this id/scope. `expired` — the inflight lease
        * lapsed before completion. `already_done` — a prior attempt won the race.
        */
-      reason: "missing" | "expired" | "already_done";
+      reason: "missing" | "expired" | "superseded" | "already_done";
     };
 
 /** Construction options for the {@link Idempotency} client. */

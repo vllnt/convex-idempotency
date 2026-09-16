@@ -1,19 +1,30 @@
 # API Reference — @vllnt/convex-idempotency
 
-**Compatibility:** `convex@^1.41.0`
+**Compatibility:** `convex@^1.45.0`. This reference describes current `main` /
+`canary`, including claim fencing; select `@canary` for that API.
 
 Construct the client with the mounted component and optional config:
 
 ```ts
 import { Idempotency } from "@vllnt/convex-idempotency";
-import { v } from "convex/values";
 
+type MyResult = { id: string };
 const idem = new Idempotency<MyResult>(components.idempotency, {
-  defaultScope: "global",        // namespace applied when a call omits `scope`
-  defaultInflightTtlMs: 60_000,  // inflight lease (ms) when `begin` omits `inflightTtlMs` (60s)
-  defaultDoneTtlMs: 86_400_000,  // done grace (ms) when `complete` omits `doneTtlMs` (24h)
-  upsertOnMissing: false,        // record finished work even if the claim row vanished
-  resultValidator: v.object({ id: v.string() }).parse, // narrow the opaque result at the boundary
+  defaultScope: "global", // namespace applied when a call omits `scope`
+  defaultInflightTtlMs: 60_000, // inflight lease (ms) when `begin` omits `inflightTtlMs` (60s)
+  defaultDoneTtlMs: 86_400_000, // done grace (ms) when `complete` omits `doneTtlMs` (24h)
+  upsertOnMissing: false, // record finished work even if the claim row vanished
+  resultValidator: (value) => {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !("id" in value) ||
+      typeof value.id !== "string"
+    ) {
+      throw new Error("Invalid stored result");
+    }
+    return { id: value.id };
+  },
 });
 ```
 
@@ -38,22 +49,23 @@ value returned by `begin` (`done` replay) and `get`. It must return a typed
 
 Claim `key` for an operation. The discriminated result is:
 
-- `{ state: "fresh"; claimId }` — the key was just minted (or a prior claim had expired and
-  was re-minted in place); the caller should perform the work and pass the opaque `claimId` to
-  `complete`.
+- `{ state: "fresh"; claimId }` — the key was just minted (or a prior claim had
+  expired and was re-minted in place); the caller should perform the work and
+  pass the opaque `claimId` to `complete`.
 - `{ state: "inflight"; expiresAt; retryAfterMs }` — another attempt holds an
   unexpired claim; do not re-run. `expiresAt` is when the lease frees and
   `retryAfterMs` is the backoff before retrying.
 - `{ state: "done"; result? }` — a prior attempt already completed; `result`
   carries the recorded outcome (validated) for a short-circuit replay.
 
-Mints an inflight key with `expiresAt = now + inflightTtlMs`. An expired key (any
-status) is re-minted `fresh` by patching the existing row in place (the id is
-reused, the stale result cleared).
+Mints an inflight key with `expiresAt = now + inflightTtlMs`. An expired key
+(any status) is re-minted `fresh` by patching the existing row in place (the id
+is reused, the stale result cleared).
 
 **Expiry check order:** `begin` checks expiry **before** the done-state. An
-expired done key is therefore re-minted `fresh` — the grace window has elapsed and
-the operation may safely re-run.
+expired done key is therefore re-minted `fresh` — the grace window has elapsed
+and the ledger permits another attempt. Whether external work is safe to repeat
+is still the host/provider's responsibility.
 
 **`inflightTtlMs` must be a positive finite number.** Passing `0`, a negative
 value, or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`. A zero or
@@ -61,7 +73,8 @@ negative TTL would produce `expiresAt ≤ now`, immediately expiring the claim.
 
 ### `complete(ctx, key, result?, opts?) → CompleteResult`
 
-`opts`: `{ scope?: string; claimId?: string; doneTtlMs?: number; upsertOnMissing?: boolean }`.
+`opts`:
+`{ scope?: string; claimId?: string; doneTtlMs?: number; upsertOnMissing?: boolean }`.
 
 Mark `key` `done`, recording `result` and extending the grace window
 (`expiresAt = now + doneTtlMs`). The discriminated result lets a host detect a
@@ -69,14 +82,16 @@ lost claim:
 
 - `{ recorded: true }` — the outcome was written.
 - `{ recorded: false; reason }` — the claim was lost; `reason` is `missing` (no
-  key), `expired` (the inflight lease lapsed before completion), `superseded` (a newer claim
-  replaced this worker's lease), or `already_done` (a prior attempt won).
+  key), `expired` (the inflight lease lapsed before completion), `superseded` (a
+  newer claim replaced this worker's lease), or `already_done` (a prior attempt
+  won).
 
 When `upsertOnMissing` is set, a `missing`/`expired` key is written as `done`
 anyway — recording finished work rather than dropping it (returns
-`{ recorded: true }`). A `superseded` claim is never upserted or allowed to overwrite the
-current lease. For migration compatibility, an omitted claim ID is accepted only for the first
-claim generation; after any re-mint it fails closed as `superseded`.
+`{ recorded: true }`). A `superseded` claim is never upserted or allowed to
+overwrite the current lease. For migration compatibility, an omitted claim ID is
+accepted only for the first claim generation; after any re-mint it fails closed
+as `superseded`.
 
 **Expiry check order:** `complete` checks the done-state **before** expiry. An
 expired done key therefore returns `already_done`, not `expired` — a prior
@@ -94,15 +109,15 @@ or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 
 Delete up to `batch` keys whose `expiresAt < before`, oldest first via the
 `by_expires` index, and return the count removed in the first pass. If a full
-batch was removed the sweep self-reschedules through the component scheduler until
-the expired tail is clean. Idempotent — safe to run anytime. A built-in daily cron
-(`crons.ts`) drives this automatically; call `purge` directly only for an extra or
-custom-cadence sweep.
+batch was removed the sweep self-reschedules through the component scheduler
+until the expired tail is clean. Idempotent — safe to run anytime. A built-in
+daily cron (`crons.ts`) drives this automatically; call `purge` directly only
+for an extra or custom-cadence sweep.
 
 ## Queries
 
 ### `get(ctx, key, scope?) → { status, result?, expiresAt } | null`
 
 The stored state for `key` in `scope`, or `null` if no key is held. `status` is
-`inflight` or `done`; `result` is present only when `done` (validated); `expiresAt`
-is the absolute ms timestamp after which the key may be re-minted.
+`inflight` or `done`; `result` is present only when `done` (validated);
+`expiresAt` is the absolute ms timestamp after which the key may be re-minted.

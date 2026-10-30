@@ -52,6 +52,7 @@ describe("idempotency — begin / complete lifecycle", () => {
   test("complete then begin replays the recorded result (done)", async () => {
     const t = setup();
     await t.mutation(api.example.begin, { key: "op_3" });
+    vi.setSystemTime(5_000);
     expect(
       await t.mutation(api.example.complete, {
         key: "op_3",
@@ -63,8 +64,8 @@ describe("idempotency — begin / complete lifecycle", () => {
     const state = await t.query(api.example.get, { key: "op_3" });
     expect(state?.status).toBe("done");
     expect(state?.result).toEqual({ chargeId: "ch_42" });
-    // done grace window stamped (now=0 + default doneTtl 86_400_000)
-    expect(state?.expiresAt).toBe(86_400_000);
+    // done grace window stamped (complete at 5_000 + default doneTtl 86_400_000)
+    expect(state?.expiresAt).toBe(86_405_000);
   });
 
   test("complete with no result records done with undefined result", async () => {

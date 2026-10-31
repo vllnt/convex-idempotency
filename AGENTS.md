@@ -77,6 +77,9 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
   caller-supplied `now`. A hostile or skewed client clock cannot force a key to look live (hijack a
   replay) or expired (bypass dedup).
 
+- **Empty key/scope guard:** `begin` and `complete` reject an empty `key` (`INVALID_KEY`) or
+  `scope` (`INVALID_SCOPE`) before any write. `get` stays permissive (reactive queries).
+
 - **INVALID_TTL guard:** `inflightTtlMs` and `doneTtlMs` must be positive finite numbers. Passing
   `0`, a negative, or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })` before any write.
   A zero/negative TTL would produce `expiresAt ≤ now`, immediately expiring the claim.

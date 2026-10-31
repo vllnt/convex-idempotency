@@ -4,6 +4,15 @@ import { mutation } from "./_generated/server.js";
 import { MAX_PURGE_BATCH } from "../shared.js";
 import { beginResult, completeResult, jsonValue } from "./validators.js";
 
+function validateKeyAndScope(key: string, scope: string): void {
+  if (key === "") {
+    throw new ConvexError({ code: "INVALID_KEY", message: "key must not be empty" });
+  }
+  if (scope === "") {
+    throw new ConvexError({ code: "INVALID_SCOPE", message: "scope must not be empty" });
+  }
+}
+
 function validateBatch(batch: number): void {
   if (!Number.isFinite(batch) || !Number.isInteger(batch) || batch < 1 || batch > MAX_PURGE_BATCH) {
     throw new ConvexError({
@@ -26,6 +35,8 @@ function validateBatch(batch: number): void {
  * correct recovery path — the done grace exists precisely to replay within the
  * window; outside it the operation may safely re-run.
  *
+ * @throws `ConvexError({ code: "INVALID_KEY" | "INVALID_SCOPE" })` when `key` or
+ *   `scope` is the empty string.
  * @throws `ConvexError({ code: "INVALID_TTL" })` when `inflightTtlMs` is not a
  *   positive finite number (≤ 0 or non-finite would produce `expiresAt ≤ now`,
  *   immediately expiring the claim and breaking the dedup window).
@@ -38,6 +49,7 @@ export const begin = mutation({
   },
   returns: beginResult,
   handler: async (ctx, args) => {
+    validateKeyAndScope(args.key, args.scope);
     if (!(args.inflightTtlMs > 0 && isFinite(args.inflightTtlMs))) {
       throw new ConvexError({
         code: "INVALID_TTL",
@@ -110,6 +122,8 @@ export const begin = mutation({
  * The `expired` reason is reserved for inflight keys whose lease lapsed before
  * the holder could complete; it does not apply to keys already marked done.
  *
+ * @throws `ConvexError({ code: "INVALID_KEY" | "INVALID_SCOPE" })` when `key` or
+ *   `scope` is the empty string.
  * @throws `ConvexError({ code: "INVALID_TTL" })` when `doneTtlMs` is not a
  *   positive finite number (≤ 0 or non-finite would produce `expiresAt ≤ now`,
  *   immediately expiring the done grace window on creation).
@@ -125,6 +139,7 @@ export const complete = mutation({
   },
   returns: completeResult,
   handler: async (ctx, args) => {
+    validateKeyAndScope(args.key, args.scope);
     if (!(args.doneTtlMs > 0 && isFinite(args.doneTtlMs))) {
       throw new ConvexError({
         code: "INVALID_TTL",

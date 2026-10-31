@@ -1,7 +1,6 @@
 # API Reference — @vllnt/convex-idempotency
 
-**Compatibility:** `convex@^1.45.0`. This reference describes current `main` /
-`canary`, including claim fencing; select `@canary` for that API.
+**Compatibility:** `convex@^1.45.0`. Error codes are listed at the end of this page.
 
 Construct the client with the mounted component and optional config:
 
@@ -67,6 +66,9 @@ expired done key is therefore re-minted `fresh` — the grace window has elapsed
 and the ledger permits another attempt. Whether external work is safe to repeat
 is still the host/provider's responsibility.
 
+**`key` and `scope` must not be empty.** An empty string throws
+`ConvexError({ code: "INVALID_KEY" })` / `INVALID_SCOPE` before any write.
+
 **`inflightTtlMs` must be a positive finite number.** Passing `0`, a negative
 value, or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`. A zero or
 negative TTL would produce `expiresAt ≤ now`, immediately expiring the claim.
@@ -99,6 +101,9 @@ winner's recorded outcome must not be overwritten by a late attempt, even after
 the grace window has lapsed. The `expired` reason applies only to inflight keys
 whose lease lapsed before completion.
 
+**`key` and `scope` must not be empty** (same errors as `begin`). `get` does
+not reject them: an empty key simply finds nothing.
+
 **`doneTtlMs` must be a positive finite number.** Passing `0`, a negative value,
 or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 
@@ -121,3 +126,18 @@ for an extra or custom-cadence sweep.
 The stored state for `key` in `scope`, or `null` if no key is held. `status` is
 `inflight` or `done`; `result` is present only when `done` (validated);
 `expiresAt` is the absolute ms timestamp after which the key may be re-minted.
+
+## Error codes
+
+Invalid arguments throw a `ConvexError` whose `data.code` is one of:
+
+| Code            | Thrown by            | Cause                                                              |
+| --------------- | -------------------- | ------------------------------------------------------------------ |
+| `INVALID_KEY`   | `begin`, `complete`  | `key` is the empty string                                          |
+| `INVALID_SCOPE` | `begin`, `complete`  | `scope` is the empty string                                        |
+| `INVALID_TTL`   | `begin`, `complete`  | `inflightTtlMs` / `doneTtlMs` is zero, negative, `NaN` or infinite |
+| `INVALID_BATCH` | `purge`              | `batch` is not an integer between 1 and 500                        |
+| `INVALID_BEFORE` | `purge`              | `before` is not finite                                             |
+
+Auth and ownership are the host's job: a component cannot read `ctx.auth`, so
+authorize the caller and derive `key`/`scope` before calling the client.

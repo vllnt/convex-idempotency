@@ -565,3 +565,36 @@ describe("idempotency — purge edge cases", () => {
     expect(state?.result).toBe("keep");
   });
 });
+
+describe("idempotency — empty key and scope rejection", () => {
+  const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
+
+  test("begin rejects an empty key with INVALID_KEY", async () => {
+    const t = setup();
+    await expect(t.mutation(api.example.begin, { key: "" })).rejects.toEqual(
+      code("INVALID_KEY"),
+    );
+  });
+
+  test("begin rejects an empty scope with INVALID_SCOPE", async () => {
+    const t = setup();
+    await expect(
+      t.mutation(api.example.begin, { key: "k", scope: "" }),
+    ).rejects.toEqual(code("INVALID_SCOPE"));
+  });
+
+  test("complete rejects an empty key with INVALID_KEY and writes nothing", async () => {
+    const t = setup();
+    await expect(
+      t.mutation(api.example.complete, { key: "", upsertOnMissing: true }),
+    ).rejects.toEqual(code("INVALID_KEY"));
+    expect(await t.query(api.example.get, { key: "" })).toBeNull();
+  });
+
+  test("complete rejects an empty scope with INVALID_SCOPE", async () => {
+    const t = setup();
+    await expect(
+      t.mutation(api.example.complete, { key: "k", scope: "" }),
+    ).rejects.toEqual(code("INVALID_SCOPE"));
+  });
+});

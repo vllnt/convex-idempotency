@@ -1,6 +1,6 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
-import { keyState } from "./validators";
+import { query } from "./_generated/server.js";
+import { keyState } from "./validators.js";
 
 export const get = query({
   args: { key: v.string(), scope: v.string() },

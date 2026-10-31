@@ -4,23 +4,27 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.1] - Unreleased
 
 ### Fixed
 
-- Fence re-minted leases with opaque claim IDs so a stale worker cannot overwrite the newer
-  claim's result, including when lost-claim upsert is enabled.
-- Reject invalid purge batches and non-finite cutoffs before they can create scheduler loops or
-  oversized transactions.
+- `begin` and `complete` reject an empty `key` or `scope` with
+  `ConvexError({ code: "INVALID_KEY" | "INVALID_SCOPE" })` instead of storing an unusable row.
+- `@vllnt/convex-idempotency/test` and the component sources now use explicit `.js` relative
+  imports and reference `vite/client`, so they type-check for consumers under both `bundler` and
+  `nodenext` module resolution.
+
+### Documentation
+
+- Document the error codes in `docs/API.md` and how to use `/test` in a consuming app.
 
 ### Changed
 
-- Treat Convex `_generated` output as CLI-owned, exclude it from formatting, and expose a
-  dedicated codegen script.
-- Refresh all direct dependencies to their latest compatible releases for canary validation.
-- Require `convex@^1.45.0` and update `convex-test` to `^0.0.56`.
+- Releases run only from `.github/workflows/publish.yml` (npm trusted publishing with provenance,
+  stable `@latest` from a `vX.Y.Z` tag on `main`); local publish scripts were removed.
+- Move to pnpm 10 with a seven-day release-age gate, and add low-memory dev defaults.
 
-## [0.1.0] - 2026-06-12
+## [0.1.0] - 2026-09-01
 
 ### Added
 
@@ -56,3 +60,16 @@ All notable changes to this project are documented here. The format is based on
   done key re-mints fresh — the grace window elapsed, the operation may re-run).
   `complete` checks the done-state before expiry (an expired done key returns
   `already_done` — a prior winner's recorded outcome must not be overwritten).
+
+### Fixed (since the first canary)
+
+- Fence re-minted leases with opaque claim IDs so a stale worker cannot overwrite the newer
+  claim's result, including when lost-claim upsert is enabled.
+- Reject invalid purge batches and non-finite cutoffs before they can create scheduler loops or
+  oversized transactions.
+
+### Changed (since the first canary)
+
+- Treat Convex `_generated` output as CLI-owned, exclude it from formatting, and expose a
+  dedicated codegen script.
+- Require `convex@^1.45.0`.

@@ -1,8 +1,8 @@
 import { ConvexError, v } from "convex/values";
-import { api } from "./_generated/api";
-import { mutation } from "./_generated/server";
-import { MAX_PURGE_BATCH } from "../shared";
-import { beginResult, completeResult, jsonValue } from "./validators";
+import { api } from "./_generated/api.js";
+import { mutation } from "./_generated/server.js";
+import { MAX_PURGE_BATCH } from "../shared.js";
+import { beginResult, completeResult, jsonValue } from "./validators.js";
 
 function validateBatch(batch: number): void {
   if (!Number.isFinite(batch) || !Number.isInteger(batch) || batch < 1 || batch > MAX_PURGE_BATCH) {

@@ -1,6 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { jsonValue } from "./validators";
+import { jsonValue } from "./validators.js";
 
 /**
  * Sandboxed tables — the idempotency ledger's own concern. A `key` is unique

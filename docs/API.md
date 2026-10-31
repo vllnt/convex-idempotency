@@ -1,7 +1,6 @@
 # API Reference — @vllnt/convex-idempotency
 
-**Compatibility:** `convex@^1.45.0`. This reference describes current `main` /
-`canary`, including claim fencing; select `@canary` for that API.
+**Compatibility:** `convex@^1.45.0`. Error codes are listed at the end of this page.
 
 Construct the client with the mounted component and optional config:
 

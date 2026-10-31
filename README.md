@@ -45,8 +45,8 @@ before recording it. Use the provider's idempotency key too.
 - **Server-sourced time** — expiry is read from the server clock; a caller can't
   supply `now`, so an adversarial clock can't force a key to look live or
   expired.
-- **TTL validation** — non-positive or infinite TTLs throw `INVALID_TTL` before
-  any write.
+- **Input validation** — empty keys or scopes and non-positive or infinite TTLs
+  throw `INVALID_KEY` / `INVALID_SCOPE` / `INVALID_TTL` before any write.
 - **Typed result** — `Idempotency<TResult>` types the stored outcome; a
   `resultValidator` narrows it at the boundary.
 - **Scopes** — global by default, or namespace per tenant / operation type.
@@ -59,10 +59,7 @@ before recording it. Use the provider's idempotency key too.
 pnpm add @vllnt/convex-idempotency
 ```
 
-Requires `convex@^1.45.0`. The command installs `latest` (`0.1.0`). This README
-describes current `main` / `canary`, including `claimId` fencing; install
-`@vllnt/convex-idempotency@canary` for that API and pin the resolved prerelease
-version for reproducible installs.
+Requires `convex@^1.45.0`.
 
 ## Usage
 
@@ -159,6 +156,22 @@ pnpm test:coverage  # enforced 100% on covered files
 
 Tests run against the real component runtime via `convex-test`
 (`@edge-runtime/vm`), not mocks.
+
+### Testing your app
+
+`@vllnt/convex-idempotency/test` exports `register(t, name = "idempotency")` to
+mount the component in a `convex-test` instance. It needs `convex-test` and
+`vitest` (with Vite's `import.meta.glob`) in the consuming app:
+
+```ts
+/// <reference types="vite/client" />
+import { convexTest } from "convex-test";
+import { register } from "@vllnt/convex-idempotency/test";
+import schema from "./schema";
+
+const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+register(t);
+```
 
 ## Contributing
 

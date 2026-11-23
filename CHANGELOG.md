@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- **Breaking:** `begin` and `complete` reject a `key` or `scope` longer than 256 characters with
+  `INVALID_KEY` / `INVALID_SCOPE`, bounding stored row and index-key size. These values were
+  accepted before; hosts with longer keys or scopes must shorten or hash them before upgrading.
 - `begin` and `complete` reject an empty `key` or `scope` with
   `ConvexError({ code: "INVALID_KEY" | "INVALID_SCOPE" })` instead of storing an unusable row.
 - `@vllnt/convex-idempotency/test` and the component sources now use explicit `.js` relative

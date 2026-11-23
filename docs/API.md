@@ -66,7 +66,7 @@ expired done key is therefore re-minted `fresh` — the grace window has elapsed
 and the ledger permits another attempt. Whether external work is safe to repeat
 is still the host/provider's responsibility.
 
-**`key` and `scope` must not be empty.** An empty string throws
+**`key` and `scope` must be 1 to 256 characters.** An empty or longer string throws
 `ConvexError({ code: "INVALID_KEY" })` / `INVALID_SCOPE` before any write.
 
 **`inflightTtlMs` must be a positive finite number.** Passing `0`, a negative
@@ -133,8 +133,8 @@ Invalid arguments throw a `ConvexError` whose `data.code` is one of:
 
 | Code            | Thrown by            | Cause                                                              |
 | --------------- | -------------------- | ------------------------------------------------------------------ |
-| `INVALID_KEY`   | `begin`, `complete`  | `key` is the empty string                                          |
-| `INVALID_SCOPE` | `begin`, `complete`  | `scope` is the empty string                                        |
+| `INVALID_KEY`   | `begin`, `complete`  | `key` is empty or longer than 256 characters                       |
+| `INVALID_SCOPE` | `begin`, `complete`  | `scope` is empty or longer than 256 characters                     |
 | `INVALID_TTL`   | `begin`, `complete`  | `inflightTtlMs` / `doneTtlMs` is zero, negative, `NaN` or infinite |
 | `INVALID_BATCH` | `purge`              | `batch` is not an integer between 1 and 500                        |
 | `INVALID_BEFORE` | `purge`              | `before` is not finite                                             |

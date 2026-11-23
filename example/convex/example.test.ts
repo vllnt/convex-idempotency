@@ -569,6 +569,35 @@ describe("idempotency — purge edge cases", () => {
 describe("idempotency — empty key and scope rejection", () => {
   const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
 
+  test("256-character key and scope are accepted on begin and complete", async () => {
+    const t = setup();
+    const max = "k".repeat(256);
+    await expect(t.mutation(api.example.begin, { key: max, scope: max })).resolves.toMatchObject({
+      state: "fresh",
+    });
+    await expect(
+      t.mutation(api.example.complete, { key: max, scope: max, upsertOnMissing: false }),
+    ).resolves.toEqual({ recorded: true });
+    expect(await t.query(api.example.get, { key: max, scope: max })).toMatchObject({ status: "done" });
+  });
+
+  test.each([
+    ["begin", "key", "INVALID_KEY"],
+    ["begin", "scope", "INVALID_SCOPE"],
+    ["complete", "key", "INVALID_KEY"],
+    ["complete", "scope", "INVALID_SCOPE"],
+  ] as const)("%s rejects a 257-character %s and writes nothing", async (fn, field, expected) => {
+    const t = setup();
+    const long = "k".repeat(257);
+    const args = { key: "k", scope: "s", [field]: long };
+    const call =
+      fn === "begin"
+        ? t.mutation(api.example.begin, args)
+        : t.mutation(api.example.complete, { ...args, upsertOnMissing: true });
+    await expect(call).rejects.toEqual(code(expected));
+    expect(await t.query(api.example.get, args)).toBeNull();
+  });
+
   test("begin rejects an empty key with INVALID_KEY", async () => {
     const t = setup();
     await expect(t.mutation(api.example.begin, { key: "" })).rejects.toEqual(

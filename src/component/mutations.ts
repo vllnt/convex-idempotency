@@ -4,12 +4,20 @@ import { mutation } from "./_generated/server.js";
 import { MAX_PURGE_BATCH } from "../shared.js";
 import { beginResult, completeResult, jsonValue } from "./validators.js";
 
+const MAX_KEY_LENGTH = 256;
+
 function validateKeyAndScope(key: string, scope: string): void {
-  if (key === "") {
-    throw new ConvexError({ code: "INVALID_KEY", message: "key must not be empty" });
+  if (key === "" || key.length > MAX_KEY_LENGTH) {
+    throw new ConvexError({
+      code: "INVALID_KEY",
+      message: `key must be 1 to ${String(MAX_KEY_LENGTH)} characters`,
+    });
   }
-  if (scope === "") {
-    throw new ConvexError({ code: "INVALID_SCOPE", message: "scope must not be empty" });
+  if (scope === "" || scope.length > MAX_KEY_LENGTH) {
+    throw new ConvexError({
+      code: "INVALID_SCOPE",
+      message: `scope must be 1 to ${String(MAX_KEY_LENGTH)} characters`,
+    });
   }
 }
 

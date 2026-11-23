@@ -45,7 +45,7 @@ before recording it. Use the provider's idempotency key too.
 - **Server-sourced time** — expiry is read from the server clock; a caller can't
   supply `now`, so an adversarial clock can't force a key to look live or
   expired.
-- **Input validation** — empty keys or scopes and non-positive or infinite TTLs
+- **Input validation** — empty or over-256-character keys or scopes and non-positive or infinite TTLs
   throw `INVALID_KEY` / `INVALID_SCOPE` / `INVALID_TTL` before any write.
 - **Typed result** — `Idempotency<TResult>` types the stored outcome; a
   `resultValidator` narrows it at the boundary.

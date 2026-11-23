@@ -569,6 +569,19 @@ describe("idempotency — purge edge cases", () => {
 describe("idempotency — empty key and scope rejection", () => {
   const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
 
+  test("256-character key and scope are accepted; longer ones are rejected before any write", async () => {
+    const t = setup();
+    const max = "k".repeat(256);
+    await expect(t.mutation(api.example.begin, { key: max, scope: max })).resolves.toMatchObject({
+      state: "fresh",
+    });
+    await expect(t.mutation(api.example.begin, { key: `${max}x` })).rejects.toEqual(code("INVALID_KEY"));
+    await expect(
+      t.mutation(api.example.complete, { key: "k", scope: `${max}x`, upsertOnMissing: true }),
+    ).rejects.toEqual(code("INVALID_SCOPE"));
+    expect(await t.query(api.example.get, { key: "k", scope: `${max}x` })).toBeNull();
+  });
+
   test("begin rejects an empty key with INVALID_KEY", async () => {
     const t = setup();
     await expect(t.mutation(api.example.begin, { key: "" })).rejects.toEqual(

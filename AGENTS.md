@@ -113,11 +113,11 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
 
 | Changed | Update in the same commit |
 |---------|--------------------------|
-| Public API (begin/complete/get/purge signatures) | README API Reference table, `docs/API.md`, `llms.txt` context |
-| Config options / defaults | README API Reference, `docs/API.md` constructor section |
-| Schema / table / indexes | README Architecture, `docs/API.md` |
+| Public API (begin/complete/get/purge signatures) | README `## API` table, `docs/API.md`, `llms.txt` context |
+| Config options / defaults | README `## API` table (`IdempotencyOptions` row) and `## Limits and gotchas` defaults, `docs/API.md` `## Client` section |
+| Schema / table / indexes | `docs/API.md`, `llms.txt` context, Architecture above |
 | Error codes | `docs/API.md` → `## Error codes` table |
-| `peerDependencies.convex` version | `llms.txt` context line (`convex@^X.Y.Z`), `docs/API.md` Compatibility line, README Installation peer note |
+| `peerDependencies.convex` version | `llms.txt` context line (`convex@^X.Y.Z`), `docs/API.md` Compatibility line, README `## Compatibility` peer range |
 | Lifecycle / expiry asymmetry | `docs/API.md` begin/complete sections, Key design decisions above |
 | Shipped files (`package.json` `files`) | `scripts/test-package.mjs` required list; run `pnpm build && pnpm test:package` |
 | README sections/examples, Links, footer, `llms.txt` Ecosystem, exports or error codes | Run `pnpm build && pnpm test:package`; it runs `scripts/check-docs.mjs` |

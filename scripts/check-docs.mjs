@@ -1,21 +1,32 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, posix } from "node:path";
 import process from "node:process";
 
 /**
  * Checks that the agent-facing docs match the package. Run after `pnpm build`
- * (it reads dist/ and type-checks the README examples against it).
+ * (it reads dist/ and type-checks the examples against it).
  *
- * README: required sections in order, install and first example in the first
- * 40 lines, badges after the Quick start, tagged and complete code blocks, the
- * exact Links section and footer, the convex peer range under Compatibility,
- * every public export and every error code documented, and every
- * TypeScript example compiling against the built package.
- * Shipped docs: relative links and #anchors resolve, the llms.txt facts and
- * ecosystem block are present, and the retired vllnt ".ai" domain appears nowhere.
- * Exports: each one has a TSDoc summary, and the main entry carries the
- * package-page `@see` link.
+ * README: required sections in order, a short "For coding agents" note,
+ * install and the first Quick start example in the first 40 lines, badges
+ * after the Quick start, the exact Links section and footer, the convex peer
+ * range under Compatibility, a table row for every public export, and every
+ * error code with its exact message.
+ * Code blocks: tagged, TypeScript instead of JavaScript, and no "..." gaps;
+ * every TypeScript example in README.md and docs/API.md is a complete file
+ * that compiles against the built package through its `exports` map.
+ * Shipped docs: relative links and #anchors resolve, docs/API.md names every
+ * export and error message, the llms.txt facts, peer range and ecosystem block
+ * are present, and the retired vllnt ".ai" domain appears nowhere.
+ * Exports: each one has a TSDoc block-comment summary, and the main entry
+ * carries the package-page `@see` link.
  */
 
 const NAME = "convex-idempotency";
@@ -38,7 +49,6 @@ const SECTIONS = [
   "Contributing",
   "Links",
   "License",
-  "Author",
 ];
 
 const FOOTER = [
@@ -70,6 +80,13 @@ const LLMS_ECOSYSTEM = [
 ];
 
 const SHIPPED_DOCS = ["README.md", "docs/API.md", "CHANGELOG.md", "llms.txt"];
+/** Docs whose TypeScript examples must compile. */
+const EXAMPLE_DOCS = ["README.md", "docs/API.md"];
+const TS_LANGS = new Set(["ts", "typescript", "tsx"]);
+const JS_LANGS = new Set(["js", "javascript", "jsx"]);
+/** Packages the examples import, linked from the repo's node_modules. */
+const EXAMPLE_DEPS = ["convex", "convex-test", "vitest", "vite"];
+const AGENTS_MAX_CHARS = 400;
 
 /** @type {string[]} */
 const problems = [];
@@ -124,6 +141,22 @@ function section(text, name) {
   return text.slice(all[at].index, end?.index ?? text.length);
 }
 
+/** True when a Markdown table row in `text` holds every cell value in backticks. */
+function hasRow(text, ...values) {
+  return text
+    .split("\n")
+    .some(
+      (l) =>
+        l.startsWith("|") &&
+        values.every((value) => l.includes(`\`${value}\``)),
+    );
+}
+
+/** True when `before` ends with a TSDoc block: a comment opened with "/**". */
+function endsWithTsdoc(before) {
+  return /\/\*\*(?:(?!\*\/)[\s\S])*\*\/\s*$/.test(before);
+}
+
 const manifest = JSON.parse(read("package.json"));
 const readme = read("README.md");
 const api = read("docs/API.md");
@@ -138,15 +171,21 @@ const h2 = headings(readme)
   .map((h) => h.text);
 if (JSON.stringify(h2) !== JSON.stringify(SECTIONS)) {
   fail(
-    `README sections must be, in order: ${SECTIONS.join(" | ")}; found: ${h2.join(" | ")}`,
+    `README sections must be, in order: ${SECTIONS.join(" | ")}, then the footer; found: ${h2.join(" | ")}`,
   );
 }
 const agents = section(readme, "For coding agents")
   .split("\n")
   .slice(1)
-  .filter((l) => l.trim());
+  .map((l) => l.trim())
+  .filter(Boolean);
 if (agents.length === 0 || agents.length > 3)
   fail('"For coding agents" must hold 1 to 3 lines');
+const agentsChars = agents.join(" ").length;
+if (agentsChars > AGENTS_MAX_CHARS)
+  fail(
+    `"For coding agents" must hold at most ${AGENTS_MAX_CHARS} characters of prose (it has ${agentsChars}); shorten it`,
+  );
 const whenToUse = section(readme, "When to use");
 const [useWhen = "", avoidWhen = ""] = whenToUse.split(
   /^Do not use it when:$/m,
@@ -179,15 +218,19 @@ const quickStartBlocks = codeBlocks(readme).filter(
     b.line > readme.slice(0, quickStart).split("\n").length &&
     b.line < readme.slice(0, readme.indexOf("\n## API\n")).split("\n").length,
 );
-const lastQuickStartLine =
-  (quickStartBlocks.at(-1)?.line ?? 0) +
-  (quickStartBlocks.at(-1)?.body.split("\n").length ?? 0);
-// A badge is a linked Markdown image: a line starting with "[![".
-const firstBadge = readmeLines.findIndex((l) =>
-  l.trimStart().startsWith("[!["),
-);
-if (firstBadge !== -1 && firstBadge < lastQuickStartLine)
-  fail("README: move the badges below the last Quick start code block");
+const lastQuickStart = quickStartBlocks.at(-1);
+// 0-based index of the closing fence of the last Quick start block.
+const lastQuickStartEnd = lastQuickStart
+  ? lastQuickStart.line + lastQuickStart.body.split("\n").length
+  : -1;
+// A badge is any image outside code blocks: Markdown "![" or HTML "<img".
+const firstBadge = prose(readme)
+  .split("\n")
+  .findIndex((l) => l.includes("![") || /<img\b/i.test(l));
+if (firstBadge !== -1 && firstBadge <= lastQuickStartEnd)
+  fail(
+    `README:${firstBadge + 1}: move every badge or image below the last Quick start code block (line ${lastQuickStartEnd + 1})`,
+  );
 if (readmeLines.slice(-4).join("\n") !== [...FOOTER, ""].join("\n")) {
   fail(`README must end with exactly these lines:\n${FOOTER.join("\n")}`);
 }
@@ -203,29 +246,50 @@ if (!section(readme, "Compatibility").includes(`\`${peer}\``)) {
   );
 }
 
-// Code blocks in shipped docs: tagged, no elided gaps; README TypeScript blocks are files.
+// Code blocks in shipped docs: tagged, TypeScript instead of JavaScript, no
+// elided gaps. "..." is allowed only as spread syntax ("...rest", "...[", "...{", "...(").
+const gap = /\.\.\.(?![\p{L}\p{N}_$[{(])|…/u;
 for (const doc of SHIPPED_DOCS) {
   for (const block of codeBlocks(read(doc))) {
     if (block.lang === "")
       fail(
         `${doc}:${block.line}: code block has no language tag; open it with \`\`\`ts, \`\`\`bash or similar`,
       );
-    if (
-      /^\s*(\/\/\s*)?(\.\.\.|…)\s*$/m.test(block.body) ||
-      block.body.includes("…")
-    ) {
+    if (JS_LANGS.has(block.lang))
       fail(
-        `${doc}:${block.line}: code block has a "..." gap; write the full code`,
+        `${doc}:${block.line}: \`\`\`${block.lang} block; write the example in TypeScript and open it with \`\`\`ts so the docs check compiles it`,
       );
-    }
+    const at = block.body.split("\n").findIndex((l) => gap.test(l));
+    if (at !== -1)
+      fail(
+        `${doc}:${block.line + 1 + at}: code block has a "..." gap; write the full code ("..." is allowed only as spread syntax)`,
+      );
   }
 }
-const examples = codeBlocks(readme).filter((b) => b.lang === "ts");
-for (const block of examples) {
-  if (!/^\/\/ convex\/[\w./-]+\.ts$/.test(block.body.split("\n")[0])) {
-    fail(
-      `README.md:${block.line}: a ts block must start with its file path, e.g. "// convex/orders.ts"`,
-    );
+
+// Every TypeScript example in README.md and docs/API.md is a file of the app.
+/** @type {Map<string, { body: string, doc: string, line: number }>} */
+const examples = new Map();
+for (const doc of EXAMPLE_DOCS) {
+  for (const block of codeBlocks(read(doc))) {
+    if (!TS_LANGS.has(block.lang)) continue;
+    const path = /^\/\/ (convex\/[\w./-]+\.tsx?)$/.exec(
+      block.body.split("\n")[0],
+    )?.[1];
+    if (path === undefined) {
+      fail(
+        `${doc}:${block.line}: a TypeScript block must start with its file path, e.g. "// convex/orders.ts"`,
+      );
+      continue;
+    }
+    const seen = examples.get(path);
+    if (seen !== undefined && seen.body !== block.body) {
+      fail(
+        `${doc}:${block.line}: ${path} is also the path of ${seen.doc}:${seen.line} with different code; give each example its own file path`,
+      );
+      continue;
+    }
+    examples.set(path, { body: block.body, doc, line: block.line });
   }
 }
 
@@ -277,11 +341,16 @@ for (const path of new Set([...packed, ...tracked])) {
     fail(`${path} mentions ${retiredDomain}; use vllnt.com`);
 }
 
-// llms.txt carries the same facts and ends with the ecosystem block.
+// llms.txt gives the same summary, when to use, the peer range, the API
+// reference and errors links, and ends with the ecosystem block.
 if (!llms.startsWith(`# ${PACKAGE}\n\n> `))
   fail("llms.txt must start with the title and a > summary");
 if (!llms.includes("\n## When to use\n"))
   fail('llms.txt lacks "## When to use"');
+if (!llms.includes(peer))
+  fail(
+    `llms.txt must name the peer range \`${peer}\` from package.json; add it to the summary paragraph`,
+  );
 for (const link of ["](./docs/API.md)", "](./docs/API.md#error-codes)"]) {
   if (!llms.includes(link))
     fail(`llms.txt lacks the link ${link.slice(2, -1)}`);
@@ -297,7 +366,7 @@ if (llms.split("https://oss.vllnt.com/llms.txt").length !== 2) {
   );
 }
 
-// Every public export is documented in the README API table and docs/API.md, with TSDoc.
+// Every public export has a README API table row, is named in docs/API.md, and has TSDoc.
 /** @type {Map<string, string>} export name to the declaration file that holds its TSDoc */
 const exported = new Map();
 const declarations = (file) => {
@@ -320,11 +389,17 @@ declarations("dist/client/index.d.ts");
 declarations("src/test.ts");
 declarations("dist/component/_generated/component.d.ts");
 const apiTable = section(readme, "API");
+const hasApiRow = (name) =>
+  new RegExp(`^\\| \\[\`${name}\`\\]`, "m").test(apiTable);
 for (const [name, file] of exported) {
-  if (!new RegExp(`\`${name}\``).test(apiTable))
-    fail(`README "## API" does not list \`${name}\`; add a table row for it`);
-  if (!api.includes(`\`${name}\``) && !api.includes(`${name}(`))
-    fail(`docs/API.md does not mention \`${name}\`; document it there`);
+  if (!hasApiRow(name))
+    fail(
+      `README "## API" has no row for \`${name}\`; add a row starting with | [\`${name}\`](./docs/API.md#...)`,
+    );
+  if (!api.includes(`\`${name}\``))
+    fail(
+      `docs/API.md does not name \`${name}\` in backticks; document it there`,
+    );
   const text = read(file);
   const at = text.search(
     new RegExp(
@@ -332,37 +407,37 @@ for (const [name, file] of exported) {
       "m",
     ),
   );
-  if (at !== -1 && !/\*\/\s*$/.test(text.slice(0, at)))
+  if (at !== -1 && !endsWithTsdoc(text.slice(0, at)))
     fail(
-      `${file}: ${name} has no TSDoc summary; add a /** ... */ comment above it in src/ and rebuild`,
+      `${file}: ${name} has no TSDoc summary; put a /** ... */ comment (not // or /* */) directly above it in src/ and rebuild`,
     );
 }
 for (const method of ["begin", "complete", "get", "purge"]) {
-  if (!new RegExp(`\`${method}\``).test(apiTable))
-    fail(`README "## API" does not list \`${method}\`; add a table row for it`);
+  if (!hasApiRow(method))
+    fail(
+      `README "## API" has no row for \`${method}\`; add a row starting with | [\`${method}\`](./docs/API.md#...)`,
+    );
   const at = read("dist/client/index.d.ts").search(
     new RegExp(`^    ${method}\\(`, "m"),
   );
   if (
     at === -1 ||
-    !/\*\/\s*$/.test(read("dist/client/index.d.ts").slice(0, at))
+    !endsWithTsdoc(read("dist/client/index.d.ts").slice(0, at))
   ) {
     fail(
-      `dist/client/index.d.ts: ${method} has no TSDoc summary; add one in src/client/index.ts and rebuild`,
+      `dist/client/index.d.ts: ${method} has no TSDoc summary; add a /** ... */ comment in src/client/index.ts and rebuild`,
     );
   }
 }
-if (!apiTable.includes("`convex.config` default"))
+if (!/^\| \[`convex\.config` default\]/m.test(apiTable))
   fail(
-    'README "## API" does not list the convex.config default export; add a "`convex.config` default" row',
+    'README "## API" has no row for the convex.config default export; add a row starting with | [`convex.config` default]',
   );
-if (
-  !/\/\*\*[^]*?\*\/\s*declare const component/.test(
-    read("dist/component/convex.config.d.ts"),
-  )
-) {
+const configDts = read("dist/component/convex.config.d.ts");
+const configAt = configDts.search(/^declare const component/m);
+if (configAt === -1 || !endsWithTsdoc(configDts.slice(0, configAt))) {
   fail(
-    "dist/component/convex.config.d.ts: the component definition has no TSDoc summary; add one in src/component/convex.config.ts and rebuild",
+    "dist/component/convex.config.d.ts: the component definition has no TSDoc summary; add a /** ... */ comment in src/component/convex.config.ts and rebuild",
   );
 }
 const classDoc = read("dist/client/index.d.ts").match(
@@ -373,40 +448,92 @@ if (!classDoc?.[1].includes(`@see ${PAGE}`))
     `the Idempotency class TSDoc lacks "@see ${PAGE}"; add that line in src/client/index.ts and rebuild`,
   );
 
-// Every error code thrown by the component is in the README and docs/API.md tables.
+// Every error code thrown by the component is in the README and docs/API.md
+// tables, and each ConvexError's message appears verbatim in a row with its code.
 const codes = new Set();
 for (const file of ["mutations.ts", "queries.ts"]) {
   for (const m of read(`src/component/${file}`).matchAll(/code: "([A-Z_]+)"/g))
     codes.add(m[1]);
 }
+/** @type {Map<string, string>} constants from src/shared.ts, as template literals print them */
+const constants = new Map();
+for (const [, key, value] of read("src/shared.ts").matchAll(
+  /^export const (\w+) = (.+);$/gm,
+)) {
+  constants.set(
+    key,
+    value.startsWith('"')
+      ? JSON.parse(value)
+      : String(Number(value.replaceAll("_", ""))),
+  );
+}
+const mutationsSource = read("src/component/mutations.ts");
+/** @type {{ code: string, message: string }[]} */
+const errors = [];
+for (const m of mutationsSource.matchAll(
+  /new ConvexError\(\{\s*code: "([A-Z_]+)",\s*message: (?:"([^"\\]*)"|`([^`\\]*)`),?\s*\}\)/g,
+)) {
+  const message =
+    m[2] ??
+    m[3].replace(/\$\{(\w+)\}/g, (raw, key) => {
+      if (constants.has(key)) return constants.get(key);
+      fail(
+        `src/component/mutations.ts: cannot resolve \${${key}} in a ConvexError message; use a constant exported from src/shared.ts`,
+      );
+      return raw;
+    });
+  errors.push({ code: m[1], message });
+}
+const thrown = (mutationsSource.match(/new ConvexError\(/g) ?? []).length;
+if (errors.length !== thrown)
+  fail(
+    `src/component/mutations.ts: ${thrown - errors.length} ConvexError call(s) are not written as new ConvexError({ code: "X", message: "..." }); keep that shape so this check can read the message`,
+  );
 const errorTable = section(readme, "Errors and fixes");
+const apiErrors = section(api, "Error codes");
 for (const code of codes) {
   if (!errorTable.includes(`\`${code}\``))
     fail(
       `README "## Errors and fixes" lacks \`${code}\`; add a row with its message, cause and fix`,
     );
-  if (!section(api, "Error codes").includes(`\`${code}\``))
+  if (!apiErrors.includes(`\`${code}\``))
     fail(`docs/API.md "## Error codes" lacks \`${code}\`; add a row for it`);
 }
+for (const { code, message } of errors) {
+  if (!hasRow(errorTable, code, message))
+    fail(
+      `README "## Errors and fixes" has no row with \`${code}\` and its exact message \`${message}\` (from src/component/mutations.ts); copy the message verbatim`,
+    );
+  if (!hasRow(apiErrors, code, message))
+    fail(
+      `docs/API.md "## Error codes" has no row with \`${code}\` and its exact message \`${message}\` (from src/component/mutations.ts); copy the message verbatim`,
+    );
+}
 
-// README TypeScript examples compile against the built package.
+// TypeScript examples compile against the built package. The package is
+// linked into node_modules, so imports resolve through its real `exports` map.
 const work = join("node_modules", ".cache", "check-docs");
 rmSync(work, { recursive: true, force: true });
-const files = [];
-for (const block of examples) {
-  const path = block.body.split("\n")[0].slice(3);
-  if (!/^convex\/[\w./-]+\.ts$/.test(path)) continue;
-  mkdirSync(dirname(join(work, path)), { recursive: true });
-  writeFileSync(join(work, path), `${block.body}\n`);
-  files.push(path);
+mkdirSync(join(work, "node_modules", "@vllnt"), { recursive: true });
+symlinkSync(process.cwd(), join(work, "node_modules", PACKAGE), "dir");
+for (const dep of EXAMPLE_DEPS) {
+  symlinkSync(
+    realpathSync(join("node_modules", dep)),
+    join(work, "node_modules", dep),
+    "dir",
+  );
 }
-const modules = files
+for (const [path, { body }] of examples) {
+  mkdirSync(dirname(join(work, path)), { recursive: true });
+  writeFileSync(join(work, path), `${body}\n`);
+}
+const modules = [...examples.keys()]
   .filter(
     (p) =>
-      !p.endsWith(".test.ts") &&
+      !/\.test\.tsx?$/.test(p) &&
       !/^convex\/(schema|convex\.config)\.ts$/.test(p),
   )
-  .map((p) => p.slice("convex/".length, -".ts".length));
+  .map((p) => p.slice("convex/".length).replace(/\.tsx?$/, ""));
 mkdirSync(join(work, "convex", "_generated"), { recursive: true });
 writeFileSync(
   join(work, "convex", "_generated", "api.ts"),
@@ -438,14 +565,6 @@ writeFileSync(
     "",
   ].join("\n"),
 );
-/** @type {Record<string, string[]>} package subpaths mapped to the built files they export */
-const paths = {};
-for (const [key, value] of Object.entries(manifest.exports)) {
-  const types =
-    typeof value === "string" ? value : (value.types ?? value.default);
-  if (key === "./package.json" || typeof types !== "string") continue;
-  paths[posix.join(PACKAGE, key)] = [posix.join("../../..", types)];
-}
 writeFileSync(
   join(work, "tsconfig.json"),
   JSON.stringify({
@@ -457,11 +576,11 @@ writeFileSync(
       lib: ["ES2022", "DOM"],
       module: "ESNext",
       moduleResolution: "Bundler",
+      jsx: "preserve",
       types: ["vite/client"],
       skipLibCheck: true,
-      paths,
     },
-    include: ["convex/**/*.ts"],
+    include: ["convex/**/*.ts", "convex/**/*.tsx"],
   }),
 );
 try {
@@ -471,8 +590,18 @@ try {
     { encoding: "utf8", stdio: "pipe" },
   );
 } catch (error) {
+  // Point each error at the doc line it came from.
+  const output = String(error.stdout).replace(
+    /^(?:\S*check-docs\/)?(convex\/[\w./-]+\.tsx?)\((\d+),(\d+)\)/gm,
+    (raw, path, line, column) => {
+      const example = examples.get(path);
+      return example
+        ? `${example.doc}:${example.line + Number(line)}:${column} (${path})`
+        : raw;
+    },
+  );
   fail(
-    `README TypeScript examples do not type-check against the built package (dist/); fix the example or the export name, then rerun pnpm build && pnpm test:package:\n${error.stdout}`,
+    `the TypeScript examples in README.md and docs/API.md do not type-check against the built package (dist/, through its package.json exports); fix the example or the export name, then rerun pnpm build && pnpm test:package:\n${output}`,
   );
 }
 
@@ -482,5 +611,5 @@ if (problems.length > 0) {
 }
 rmSync(work, { recursive: true, force: true });
 console.log(
-  `OK    docs: ${SECTIONS.length} sections, ${exported.size} exports, ${codes.size} error codes, ${files.length} examples compile`,
+  `OK    docs: ${SECTIONS.length} sections, ${exported.size} exports, ${codes.size} error codes, ${errors.length} error messages, ${examples.size} examples compile`,
 );

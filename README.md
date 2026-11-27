@@ -59,7 +59,7 @@ export const placeOrder = mutation({
 });
 ```
 
-A retry with the same `requestId` returns the first `orderId` and inserts nothing. Claim, insert and record run in one mutation transaction: if the handler throws, all three roll back. For work split across functions, see [Common tasks](#common-tasks).
+A retry with the same `requestId` returns the first `orderId` and inserts nothing within the 24 h done grace. Claim, insert and record run in one mutation transaction: if the handler throws, all three roll back. For work split across functions, see [Common tasks](#common-tasks).
 
 The host schema needs the `orders` table used above:
 
@@ -81,22 +81,22 @@ export default defineSchema({
 
 Full reference: [docs/API.md](./docs/API.md).
 
-| Export                                                                        | Kind                                | What it does                                                                                                          |
-| ----------------------------------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| [`Idempotency`](./docs/API.md#client)                                         | class (`@vllnt/convex-idempotency`) | Client: `new Idempotency<TResult>(components.idempotency, options?)`                                                  |
-| [`begin`](./docs/API.md#beginctx-key-opts--beginresult)                       | method, mutation ctx                | Claim a key: `fresh` with a `claimId`, `inflight` with `retryAfterMs`, or `done` with the stored `result`             |
-| [`complete`](./docs/API.md#completectx-key-result-opts--completeresult)       | method, mutation ctx                | Record the result: `{ recorded: true }` or `{ recorded: false, reason }`                                              |
-| [`get`](./docs/API.md#getctx-key-scope---status-result-expiresat---null)      | method, query ctx                   | Read a key's `status`, `result` and `expiresAt`, or `null`                                                            |
-| [`purge`](./docs/API.md#purgectx-opts--number)                                | method, mutation ctx                | Delete expired keys in batches; returns the count removed in the first pass                                           |
-| [`IdempotencyOptions`](./docs/API.md#client)                                  | type                                | Constructor options: `defaultScope`, `defaultInflightTtlMs`, `defaultDoneTtlMs`, `upsertOnMissing`, `resultValidator` |
-| [`BeginResult`](./docs/API.md#beginctx-key-opts--beginresult)                 | type                                | Return type of `begin`                                                                                                |
-| [`CompleteResult`](./docs/API.md#completectx-key-result-opts--completeresult) | type                                | Return type of `complete`                                                                                             |
-| [`KeyState`](./docs/API.md#getctx-key-scope---status-result-expiresat---null) | type                                | Return type of `get` (when not `null`)                                                                                |
-| [`ResultParser`](./docs/API.md#client)                                        | type                                | `(value: unknown) => TResult`, the shape of `resultValidator`                                                         |
-| [`IdempotencyComponent`](./docs/API.md#client)                                | type                                | The function references the client needs (`components.idempotency`)                                                   |
-| [`convex.config` default](./docs/API.md#entry-points)                         | component (`/convex.config`)        | The component definition for `app.use(...)`, mounted as `idempotency`                                                 |
-| [`register`](./docs/API.md#entry-points)                                      | function (`/test`)                  | `register(t, name = "idempotency")` mounts the component in a `convex-test` instance                                  |
-| [`ComponentApi`](./docs/API.md#entry-points)                                  | type (`/_generated/component`)      | Generated type of the mounted component's functions                                                                   |
+| Export                                                                        | Kind                                               | What it does                                                                                                          |
+| ----------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| [`Idempotency`](./docs/API.md#client)                                         | class (`@vllnt/convex-idempotency`)                | Client: `new Idempotency<TResult>(components.idempotency, options?)`                                                  |
+| [`begin`](./docs/API.md#beginctx-key-opts--beginresult)                       | method, `runMutation` ctx (mutation or action)     | Claim a key: `fresh` with a `claimId`, `inflight` with `retryAfterMs`, or `done` with the stored `result`             |
+| [`complete`](./docs/API.md#completectx-key-result-opts--completeresult)       | method, `runMutation` ctx (mutation or action)     | Record the result: `{ recorded: true }` or `{ recorded: false, reason }`                                              |
+| [`get`](./docs/API.md#getctx-key-scope---status-result-expiresat---null)      | method, `runQuery` ctx (query, mutation or action) | Read a key's `status`, `result` and `expiresAt`, or `null`                                                            |
+| [`purge`](./docs/API.md#purgectx-opts--number)                                | method, `runMutation` ctx (mutation or action)     | Delete expired keys in batches; returns the count removed in the first pass                                           |
+| [`IdempotencyOptions`](./docs/API.md#client)                                  | type                                               | Constructor options: `defaultScope`, `defaultInflightTtlMs`, `defaultDoneTtlMs`, `upsertOnMissing`, `resultValidator` |
+| [`BeginResult`](./docs/API.md#beginctx-key-opts--beginresult)                 | type                                               | Return type of `begin`                                                                                                |
+| [`CompleteResult`](./docs/API.md#completectx-key-result-opts--completeresult) | type                                               | Return type of `complete`                                                                                             |
+| [`KeyState`](./docs/API.md#getctx-key-scope---status-result-expiresat---null) | type                                               | Return type of `get` (when not `null`)                                                                                |
+| [`ResultParser`](./docs/API.md#client)                                        | type                                               | `(value: unknown) => TResult`, the shape of `resultValidator`                                                         |
+| [`IdempotencyComponent`](./docs/API.md#client)                                | type                                               | The function references the client needs (`components.idempotency`)                                                   |
+| [`convex.config` default](./docs/API.md#entry-points)                         | component (`/convex.config`)                       | The component definition for `app.use(...)`, mounted as `idempotency`                                                 |
+| [`register`](./docs/API.md#entry-points)                                      | function (`/test`)                                 | `register(t, name = "idempotency")` mounts the component in a `convex-test` instance                                  |
+| [`ComponentApi`](./docs/API.md#entry-points)                                  | type (`/_generated/component`)                     | Generated type of the mounted component's functions                                                                   |
 
 ## Common tasks
 
@@ -110,16 +110,23 @@ import { Idempotency } from "@vllnt/convex-idempotency";
 import { components } from "./_generated/api";
 import { mutation } from "./_generated/server";
 
-const idem = new Idempotency(components.idempotency);
+const idem = new Idempotency<{ orderId: string }>(components.idempotency);
 
-export const claim = mutation({
-  args: { requestId: v.string() },
-  handler: async (ctx, { requestId }) => {
+export const placeTenantOrder = mutation({
+  args: { requestId: v.string(), item: v.string() },
+  handler: async (ctx, { requestId, item }) => {
     const identity = await ctx.auth.getUserIdentity();
     if (identity === null) throw new Error("Unauthenticated");
-    return await idem.begin(ctx, requestId, {
-      scope: identity.tokenIdentifier,
+    const scope = identity.tokenIdentifier;
+    const claim = await idem.begin(ctx, requestId, { scope });
+    if (claim.state === "done") return claim.result ?? null;
+    if (claim.state === "inflight") throw new Error("Retry later");
+    const result = { orderId: await ctx.db.insert("orders", { item }) };
+    await idem.complete(ctx, requestId, result, {
+      scope,
+      claimId: claim.claimId,
     });
+    return result;
   },
 });
 ```
@@ -162,7 +169,7 @@ the claim was lost:
 | `missing`      | No row for this key (never claimed, or purged)           | Set `upsertOnMissing: true` to record the result anyway |
 | `expired`      | The inflight lease ran out before `complete`             | Raise `inflightTtlMs`, or set `upsertOnMissing: true`   |
 | `superseded`   | A newer `begin` re-claimed the key after the lease ended | Do not overwrite; the newer attempt owns the key        |
-| `already_done` | Another attempt already recorded a result                | Read it with `get` or `begin`                           |
+| `already_done` | Another attempt already recorded a result                | Read it with `get`                                      |
 
 **Purge on your own schedule.** A built-in daily cron deletes expired keys. To
 sweep more often, call `idem.purge(ctx)` from your own cron.
@@ -195,7 +202,8 @@ Invalid arguments throw a `ConvexError` whose `data.code` is one of these:
 - `get` returns expired rows until `purge` deletes them or `begin` re-claims
   them. Compare `expiresAt` with the current time to know if a key is live.
 - `get` does not reject an empty `key` or `scope`; it looks the pair up like
-  any other. Only rows written by 0.1.0, which allowed empty values, can match.
+  any other. Only rows written by 0.1.0 and its canaries, which allowed empty
+  values, can match.
 - `purge` trusts `before`. A future `before` also deletes live keys, so those
   operations can run again. Never take it from client input.
 - `complete` without `claimId` is accepted only for a key's first claim. After a
@@ -223,11 +231,11 @@ Invalid arguments throw a `ConvexError` whose `data.code` is one of these:
 
 ```bash
 pnpm test           # single run
-pnpm test:coverage  # enforced 100% on covered files
+pnpm test:coverage  # 100% enforced on the source files listed in vitest.config.mts
 ```
 
-Tests run against the real component runtime via `convex-test`
-(`@edge-runtime/vm`), not mocks.
+Tests run the component's real functions in `convex-test`'s in-memory backend
+(`@edge-runtime/vm`); the component code itself is not mocked.
 
 ### Testing your app
 
@@ -239,10 +247,24 @@ mount the component in a `convex-test` instance built from your app's schema:
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { register } from "@vllnt/convex-idempotency/test";
+import { expect, test } from "vitest";
+import { api } from "./_generated/api";
 import schema from "./schema";
 
-const t = convexTest(schema, import.meta.glob("./**/*.ts"));
-register(t);
+test("a retried placeOrder returns the first orderId", async () => {
+  const t = convexTest(schema, import.meta.glob("./**/*.ts"));
+  register(t);
+  const first = await t.mutation(api.orders.placeOrder, {
+    requestId: "r1",
+    item: "book",
+  });
+  const retry = await t.mutation(api.orders.placeOrder, {
+    requestId: "r1",
+    item: "book",
+  });
+  expect(first?.orderId).toBeTypeOf("string");
+  expect(retry?.orderId).toBe(first?.orderId);
+});
 ```
 
 ## Security
@@ -276,13 +298,6 @@ See
 ## License
 
 MIT, see [LICENSE](./LICENSE).
-
-## Author
-
-Built by [bntvllnt](https://github.com/bntvllnt) ·
-[bntvllnt.com](https://bntvllnt.com) · [X @bntvllnt](https://x.com/bntvllnt)
-
-If this is useful, [sponsor the work](https://github.com/sponsors/bntvllnt).
 
 ---
 

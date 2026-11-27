@@ -125,7 +125,7 @@ interface CompleteOptions {
  * if (r.state === "inflight") throw new Error(`retry in ${r.retryAfterMs}ms`);
  * const out = await doWork();                               // r.state === "fresh"
  * const done = await idem.complete(ctx, requestId, out, { claimId: r.claimId });
- * if (!done.recorded) log.warn("claim lost", done.reason);  // work ran, row gone
+ * if (!done.recorded) log.warn("claim lost", done.reason);  // work ran, not recorded
  * ```
  */
 export class Idempotency<TResult = unknown> {

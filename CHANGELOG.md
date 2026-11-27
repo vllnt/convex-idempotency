@@ -38,6 +38,11 @@ All notable changes to this project are documented here. The format is based on
   contributor or test file would ship, or an `llms.txt` link does not resolve inside it.
 - `package.json` `homepage` points to `https://oss.vllnt.com/packages/convex-idempotency`, with
   more keywords.
+- Development dependencies upgraded: `convex` 1.51, `convex-test` 0.0.73, `eslint` 10,
+  `@vllnt/typescript` 3 (adds `exactOptionalPropertyTypes`), `vitest` 5.1.1, pnpm 10.34.9. The
+  `convex` peer range stays `^1.45.0`, and the public type declarations are unchanged.
+- `begin` (on `done`) and `get` leave the `result` key out when no result is stored, instead of
+  setting it to `undefined`. The value read is the same.
 
 ## [0.1.0] - 2026-09-01
 

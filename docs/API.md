@@ -23,10 +23,27 @@ app.use(idempotency);
 export default app;
 ```
 
+## Client
+
+`new Idempotency<TResult = unknown>(component, options?)`
+
+- `component`: `components.idempotency` from your app's `convex/_generated/api`
+  (type `IdempotencyComponent`, the function references the client calls).
+- `options`: `IdempotencyOptions<TResult>`, all optional:
+
+| Option                 | Type                    | Default      | Effect                                                                                 |
+| ---------------------- | ----------------------- | ------------ | -------------------------------------------------------------------------------------- |
+| `defaultScope`         | `string`                | `"global"`   | Scope used when a call omits `scope`. Must not be `""` (`begin`/`complete` throw)      |
+| `defaultInflightTtlMs` | `number`                | `60_000`     | Inflight lease (ms) used when `begin` omits `inflightTtlMs`                            |
+| `defaultDoneTtlMs`     | `number`                | `86_400_000` | Done grace (ms) used when `complete` omits `doneTtlMs`                                 |
+| `upsertOnMissing`      | `boolean`               | `false`      | `complete` records a `missing` or `expired` key as `done` instead of `recorded: false` |
+| `resultValidator`      | `ResultParser<TResult>` | none         | `(value: unknown) => TResult`; runs on `begin`, `get` and `complete` results           |
+
 Construct the client with the mounted component and optional config:
 
 ```ts
 import { Idempotency } from "@vllnt/convex-idempotency";
+import { components } from "./_generated/api";
 
 type MyResult = { id: string };
 const idem = new Idempotency<MyResult>(components.idempotency, {
@@ -132,7 +149,9 @@ the grace window has lapsed. The `expired` reason applies only to inflight keys
 whose lease lapsed before completion.
 
 **`key` and `scope` must not be empty** (same errors as `begin`). `get` does not
-reject them: an empty key simply finds nothing.
+check them: it looks up the `(scope, key)` pair as given. 0.1.0 let `begin` and
+`complete` (with `upsertOnMissing`) store an empty key or scope, so `get` can
+still return such a row until `purge` deletes it; otherwise it returns `null`.
 
 **`doneTtlMs` must be a positive finite number.** Passing `0`, a negative value,
 or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.

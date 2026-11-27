@@ -105,13 +105,15 @@ interface CompleteOptions {
 }
 
 /**
- * Consumer-facing client for the lease-based idempotency key ledger. The host
+ * Client for the idempotency key ledger: `begin` claims a key, `complete`
+ * records its result, `get` reads it and `purge` deletes expired keys. The host
  * owns meaning and auth; it passes an opaque `key` and an optional `scope`, and
- * stores an arbitrary `TResult` outcome that replays return verbatim. Pass a
- * `resultValidator` to narrow the opaque stored value to `TResult` at the
- * boundary — there is no unchecked cast.
+ * stores a `TResult` outcome that replays return. Pass a `resultValidator` to
+ * check the stored value at the boundary; without one it is returned unchecked
+ * as `TResult`.
  *
  * @typeParam TResult - The host's stored outcome type (defaults to `unknown`).
+ * @see https://oss.vllnt.com/packages/convex-idempotency
  *
  * @example
  * ```ts

@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - Unreleased
+## [0.1.1] - 2026-11-27
 
 ### Fixed
 
@@ -14,6 +14,9 @@ All notable changes to this project are documented here. The format is based on
   options accept an explicit `undefined`. Hosts that turn on `exactOptionalPropertyTypes` can pass
   `v.optional(...)` arguments straight through instead of getting TS2379. Types only widen, so
   every call that compiled against 0.1.0 still compiles.
+- `register(t)` from `@vllnt/convex-idempotency/test` accepts a `convex-test` instance built
+  from the host app's own schema. It was typed for the component's schema only, so a host schema
+  with its own tables failed with TS2345. Types only; nothing changes at runtime.
 - `@vllnt/convex-idempotency/test` and the component sources now use explicit `.js` relative
   imports and reference `vite/client`, so they type-check for consumers under both `bundler` and
   `nodenext` module resolution.
@@ -50,6 +53,8 @@ All notable changes to this project are documented here. The format is based on
   setting it to `undefined`. The value read is the same; only same-process checks such as
   `"result" in r` or `toStrictEqual` see the difference.
 - Type tests (`*.test-d.ts`) now run with every `vitest run`, so CI type-checks the example app.
+- The publish workflow runs `pnpm test:package` in its quality gates, so a canary or stable
+  release no longer relies on PR CI for the tarball check.
 
 ## [0.1.0] - 2026-09-01
 

@@ -9,7 +9,7 @@ page.
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `@vllnt/convex-idempotency`                      | `Idempotency` class; types `IdempotencyComponent`, `IdempotencyOptions`, `BeginResult`, `CompleteResult`, `KeyState`, `ResultParser` |
 | `@vllnt/convex-idempotency/convex.config`        | The component definition to mount with `app.use(...)` (named `idempotency`)                                                          |
-| `@vllnt/convex-idempotency/test`                 | `register(t, name = "idempotency")` to mount the component in a `convex-test` instance                                               |
+| `@vllnt/convex-idempotency/test`                 | `register(t, name = "idempotency")` to mount the component in a `convex-test` instance built from the host app's own schema          |
 | `@vllnt/convex-idempotency/_generated/component` | Type-only `ComponentApi` of the mounted component                                                                                    |
 
 Mount it in `convex/convex.config.ts`:

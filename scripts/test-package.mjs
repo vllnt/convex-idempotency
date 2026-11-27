@@ -7,28 +7,16 @@ import process from "node:process";
  * Checks what `npm pack` would publish. Run after `pnpm build`: the files the
  * package.json "exports" point at live in dist/ and src/.
  *
- * Fails when a required file is missing or empty, when a file that must not ship
- * is present, or when an llms.txt link does not resolve inside the tarball.
+ * Fails when a required file is missing or empty, when anything outside the
+ * expected layout or doc set would ship (contributor or internal docs), or when
+ * llms.txt is missing its agent notes or links outside the tarball.
+ * Test files and the privacy scan are covered by check-package-contents.sh.
  */
 
-const DOCS = [
-  "README.md",
-  "LICENSE",
-  "CHANGELOG.md",
-  "llms.txt",
-  "docs/API.md",
-];
+const DOCS = ["README.md", "LICENSE", "CHANGELOG.md", "llms.txt", "docs/API.md"];
 
-/** Files that may sit at the tarball root. Anything else there is unexpected. */
-const ROOT_FILES = new Set(["package.json", ...DOCS.filter((f) => !f.includes("/"))]);
-
-/** Paths that must never ship, with the reason reported on failure. */
-const FORBIDDEN = [
-  [/(^|\/)(AGENTS|CLAUDE)\.md$/, "contributor agent instructions"],
-  [/\.(test|spec)\.[cm]?[jt]sx?$/, "test or spec file"],
-  [/(^|\/)__tests__\//, "test directory"],
-  [/^(example|scripts|\.github)\//, "repository tooling"],
-];
+/** The only top-level entries the tarball may contain. */
+const TOP_LEVEL = new Set(["package.json", "dist", "src", "docs", ...DOCS]);
 
 const REPO_BLOB = /^https:\/\/github\.com\/vllnt\/convex-idempotency\/blob\/[^/]+\/(.+)$/;
 
@@ -50,13 +38,6 @@ function packedFiles() {
   return new Map(pack.files.map((file) => [file.path, file.size]));
 }
 
-/** @param {string} markdown @returns {string[]} link targets without fragments */
-function linkTargets(markdown) {
-  return [...markdown.matchAll(/\]\(([^)]+)\)/g)]
-    .map(([, target]) => target.split("#")[0])
-    .filter(Boolean);
-}
-
 const manifest = JSON.parse(readFileSync("package.json", "utf8"));
 const packed = packedFiles();
 /** @type {string[]} */
@@ -73,27 +54,29 @@ for (const path of required) {
 }
 
 for (const path of packed.keys()) {
-  for (const [pattern, reason] of FORBIDDEN) {
-    if (pattern.test(path)) problems.push(`must not ship (${reason}): ${path}`);
-  }
-  if (!path.includes("/") && !ROOT_FILES.has(path)) {
-    problems.push(`unexpected root file: ${path}`);
-  }
-  if (path.startsWith("docs/") && path !== "docs/API.md") {
-    problems.push(`unexpected doc: ${path}`);
+  if (!TOP_LEVEL.has(path.split("/")[0])) {
+    problems.push(`must not ship: ${path}`);
+  } else if (/\.(md|mdx|txt)$/i.test(path) && !DOCS.includes(path)) {
+    problems.push(`must not ship (not a published doc): ${path}`);
   }
 }
 
 if (packed.has("llms.txt")) {
-  for (const target of linkTargets(readFileSync("llms.txt", "utf8"))) {
+  const llms = readFileSync("llms.txt", "utf8");
+  for (const heading of ["## For coding agents", "## Ecosystem"]) {
+    if (!llms.includes(`\n${heading}\n`)) problems.push(`llms.txt lacks "${heading}"`);
+  }
+  for (const [, link] of llms.matchAll(/\]\(([^)]+)\)/g)) {
+    const target = link.split("#")[0];
     const repoPath = REPO_BLOB.exec(target)?.[1];
-    if (repoPath !== undefined) {
-      if (packed.has(repoPath)) {
-        problems.push(`llms.txt links ${repoPath} on GitHub main; use ./${repoPath}`);
-      }
+    if (repoPath !== undefined && packed.has(repoPath)) {
+      problems.push(`llms.txt links ${repoPath} on GitHub; use ./${repoPath}`);
     } else if (!/^[a-z][a-z0-9+.-]*:/i.test(target)) {
-      const path = posix.normalize(target);
-      if (!packed.has(path)) problems.push(`llms.txt link not in tarball: ${target}`);
+      if (!target.startsWith("./")) {
+        problems.push(`llms.txt relative link must start with ./: ${target}`);
+      } else if (!packed.has(posix.normalize(target))) {
+        problems.push(`llms.txt link not in tarball: ${target}`);
+      }
     }
   }
 }

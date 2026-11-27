@@ -1,17 +1,17 @@
 # @vllnt/convex-idempotency
 
-> Exactly-once idempotency key ledger for retried operations, as a Convex component
+> Lease-based idempotency key ledger for retried operations, as a Convex component
 
 `@vllnt/convex-idempotency` is a publishable Convex component. It targets `convex@^1.45.0`.
-It stores one sandboxed table - `keys` (unique per `(scope, key)`, holding a `status` of `inflight` or `done`, an opaque host `result`, and an `expiresAt` deadline). `begin` mints an inflight claim under a short server-timed lease (`inflightTtlMs`, default 60s) or replays a prior `done` outcome; `complete` returns a discriminated `recorded` outcome and extends a longer done grace window (`doneTtlMs`, default 24h); expired keys are re-minted in place; a bounded, self-rescheduling `purge` (and a built-in daily cron) sweeps them. Time is read from the server clock inside every handler - no caller-supplied `now` - so a hostile clock cannot force a key to look live or expired. Dedup rides the Convex mutation transaction. The host owns the operation, auth, and the result type (the client is generic over it, with an optional `resultValidator` narrowing the opaque stored value at the boundary); the component owns only the dedup ledger.
+It stores one sandboxed table - `keys` (unique per `(scope, key)`, holding a `status` of `inflight` or `done`, an opaque host `result`, and an `expiresAt` deadline). `begin` mints an inflight claim under a short server-timed lease (`inflightTtlMs`, default 60s) or replays a prior `done` outcome; `complete` returns a discriminated `recorded` outcome and extends a longer done grace window (`doneTtlMs`, default 24h); expired keys are re-minted in place; a bounded, self-rescheduling `purge` (and a built-in daily cron) sweeps them. Time is read from the server clock inside every handler - no caller-supplied `now` - so a hostile clock cannot force a key to look live or expired; the only time input is `purge`'s optional `before` cutoff, which must not come from client input. The ledger does not guarantee exactly-once external side effects: use the provider's idempotency key too. Dedup rides the Convex mutation transaction. The host owns the operation, auth, and the result type (the client is generic over it, with an optional `resultValidator` narrowing the opaque stored value at the boundary); the component owns only the dedup ledger.
 
 ## For coding agents
 
-The docs are bundled in the npm package at `node_modules/@vllnt/convex-idempotency/docs/`. They match the installed version. Read them before writing code. The typed source is in `src/` next to them.
+The docs are bundled in the npm package: `node_modules/@vllnt/convex-idempotency/docs/API.md`, with `README.md`, `CHANGELOG.md`, this `llms.txt` and the typed `src/` at the package root. They match the installed version. Read them before writing code.
 
 ## Docs
 
-- [README](./README.md): Project overview, installation, usage examples, architecture
+- [README](./README.md): Project overview, installation, usage examples, API summary
 - [API Reference](./docs/API.md): Public class methods, return shapes, input validation
 - [Changelog](./CHANGELOG.md): Version history and release notes
 - [License](./LICENSE): MIT license

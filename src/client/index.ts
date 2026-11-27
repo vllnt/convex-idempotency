@@ -189,8 +189,8 @@ export class Idempotency<TResult = unknown> {
    * Mark `key` `done`, recording `result` and extending the done grace window.
    * Returns a discriminated outcome: `recorded: true` on success, or
    * `recorded: false` with a `reason` when the claim was lost (missing, expired,
-   * superseded, or already done) so the host can react to dropped work. `result` is validated
-   * against the host validator before it is stored.
+   * superseded, or already done) so the host can react to dropped work.
+   * `result` is validated against the host validator before it is stored.
    */
   complete(
     ctx: RunMutationCtx,
@@ -232,7 +232,7 @@ export class Idempotency<TResult = unknown> {
 
   /**
    * Delete expired keys in bounded batches, oldest first. `before` defaults to
-   * the server clock; `batch` caps each pass and the sweep self-reschedules until
+   * the server clock (a future `before` also deletes live keys); `batch` caps each pass and the sweep self-reschedules until
    * the tail is clean. Returns the count removed in the first pass.
    */
   purge(

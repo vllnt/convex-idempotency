@@ -22,8 +22,10 @@ All notable changes to this project are documented here. The format is based on
   `llms.txt` links the bundled files relatively and adds a "For coding agents" note and an
   ecosystem link; the README adds the same note and a "Related packages" section.
 - `docs/API.md` lists the package entry points and notes that `get` returns an expired row until
-  it is purged or re-minted. TSDoc no longer suggests a `convex/values` `.parse` for
-  `resultValidator` and lists the `superseded` completion reason.
+  it is purged or re-minted, and that a future `purge` `before` cutoff also deletes live keys.
+  TSDoc no longer suggests a `convex/values` `.parse` for `resultValidator` and lists the
+  `superseded` completion reason. The package description says "lease-based" instead of
+  "exactly-once", matching the README's side-effect caveat.
 
 ### Changed
 

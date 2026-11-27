@@ -49,12 +49,14 @@ const idem = new Idempotency<MyResult>(components.idempotency, {
 ```
 
 `Idempotency<TResult = unknown>` is generic over the host's stored outcome type.
-All methods take the host `ctx` (a query or mutation context) as the first
-argument.
+All methods take the host `ctx` as the first argument: `begin`, `complete` and
+`purge` need a mutation or action context (`runMutation`); `get` works with any
+context that has `runQuery`.
 
-**Time is server-sourced.** Every handler reads `Date.now()` itself; no method
-accepts a caller-supplied `now`, so a skewed or hostile client clock cannot make
-a key look live or expired.
+**Time is server-sourced.** Every handler reads `Date.now()` itself; `begin`,
+`complete` and `get` accept no caller-supplied `now`, so a skewed or hostile
+client clock cannot make a key look live or expired. The one time input is
+`purge`'s optional `before` cutoff (see below).
 
 **Result validation.** When `resultValidator` is set it runs at the client
 boundary: over the value written by `complete` (before storage) and over the
@@ -138,9 +140,14 @@ or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 Delete up to `batch` keys whose `expiresAt < before`, oldest first via the
 `by_expires` index, and return the count removed in the first pass. If a full
 batch was removed the sweep self-reschedules through the component scheduler
-until the expired tail is clean. Idempotent — safe to run anytime. A built-in
-daily cron (`crons.ts`) drives this automatically; call `purge` directly only
-for an extra or custom-cadence sweep.
+until the expired tail is clean. Idempotent — re-running with the same cutoff
+removes nothing new.
+
+**`before` is trusted as given.** A future `before` also deletes live keys
+(inflight and done), which lets the work run again. Omit it, or compute it on
+the server; never pass a value from client input. A built-in daily cron
+(`crons.ts`) drives this automatically; call `purge` directly only for an extra
+or custom-cadence sweep.
 
 ## Queries
 

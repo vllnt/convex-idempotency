@@ -63,10 +63,10 @@ Requires `convex@^1.45.0`.
 
 ### For coding agents
 
-The docs are bundled in the npm package at
-`node_modules/@vllnt/convex-idempotency/docs/`, with `llms.txt`, `CHANGELOG.md`
-and the typed `src/` next to them. They match the installed version. Read them
-before writing code.
+The docs are bundled in the npm package:
+`node_modules/@vllnt/convex-idempotency/docs/API.md`, with `README.md`,
+`CHANGELOG.md`, `llms.txt` and the typed `src/` at the package root. They match
+the installed version. Read them before writing code.
 
 ## Usage
 
@@ -194,7 +194,8 @@ them for their domain; use this ledger for any other retried operation.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See
+[CONTRIBUTING.md](https://github.com/vllnt/convex-idempotency/blob/main/CONTRIBUTING.md).
 
 ## Author
 

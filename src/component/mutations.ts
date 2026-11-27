@@ -110,9 +110,10 @@ export const begin = mutation({
  * `doneTtlMs`. Returns a discriminated outcome so the host can detect a lost
  * claim: `recorded: false` with `missing` (key never existed), `expired` (the
  * inflight lease lapsed before completion), `superseded` (a newer claim replaced
- * this worker's lease), or `already_done` (a prior attempt won). When `upsertOnMissing` is set, a `missing`/`expired` key is written as
- * `done` anyway — for hosts that would rather record the finished work than drop
- * it. Time is server-sourced.
+ * this worker's lease), or `already_done` (a prior attempt won). When
+ * `upsertOnMissing` is set, a `missing`/`expired` key is written as `done`
+ * anyway — for hosts that would rather record the finished work than drop it.
+ * Time is server-sourced.
  *
  * **Expiry check order (intentional asymmetry):** `complete` checks the
  * done-state BEFORE expiry. An expired done key therefore returns
@@ -208,11 +209,12 @@ export const complete = mutation({
 /**
  * Delete up to `batch` keys whose `expiresAt < before`, oldest first via the
  * `by_expires` index. `before` defaults to the server clock (`Date.now()`) when
- * omitted, so the built-in cron sweeps exactly the keys expired as of the run —
- * a caller cannot pass a future cutoff it did not compute. If a full batch was
- * removed there may be more, so the sweep self-reschedules through
- * `ctx.scheduler` until a short batch signals the tail is clean. Idempotent:
- * re-running only ever removes already-expired rows.
+ * omitted, so the built-in cron sweeps exactly the keys expired as of the run.
+ * An explicit `before` is trusted as given: a future cutoff also deletes live
+ * keys, so never derive it from untrusted input. If a full batch was removed
+ * there may be more, so the sweep self-reschedules through `ctx.scheduler` until
+ * a short batch signals the tail is clean. Idempotent: re-running with the same
+ * cutoff removes nothing new.
  */
 export const purge = mutation({
   args: { before: v.optional(v.number()), batch: v.number() },

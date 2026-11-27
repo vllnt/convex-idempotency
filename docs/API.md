@@ -1,6 +1,27 @@
 # API Reference — @vllnt/convex-idempotency
 
-**Compatibility:** `convex@^1.45.0`. Error codes are listed at the end of this page.
+**Compatibility:** `convex@^1.45.0`. Error codes are listed at the end of this
+page.
+
+## Entry points
+
+| Import                                           | Provides                                                                                                                             |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `@vllnt/convex-idempotency`                      | `Idempotency` class; types `IdempotencyComponent`, `IdempotencyOptions`, `BeginResult`, `CompleteResult`, `KeyState`, `ResultParser` |
+| `@vllnt/convex-idempotency/convex.config`        | The component definition to mount with `app.use(...)` (named `idempotency`)                                                          |
+| `@vllnt/convex-idempotency/test`                 | `register(t, name = "idempotency")` to mount the component in a `convex-test` instance                                               |
+| `@vllnt/convex-idempotency/_generated/component` | Type-only `ComponentApi` of the mounted component                                                                                    |
+
+Mount it in `convex/convex.config.ts`:
+
+```ts
+import { defineApp } from "convex/server";
+import idempotency from "@vllnt/convex-idempotency/convex.config";
+
+const app = defineApp();
+app.use(idempotency);
+export default app;
+```
 
 Construct the client with the mounted component and optional config:
 
@@ -28,17 +49,21 @@ const idem = new Idempotency<MyResult>(components.idempotency, {
 ```
 
 `Idempotency<TResult = unknown>` is generic over the host's stored outcome type.
-All methods take the host `ctx` (a query or mutation context) as the first
-argument.
+All methods take the host `ctx` as the first argument: `begin`, `complete` and
+`purge` need a mutation or action context (`runMutation`); `get` works with any
+context that has `runQuery`.
 
-**Time is server-sourced.** Every handler reads `Date.now()` itself; no method
-accepts a caller-supplied `now`, so a skewed or hostile client clock cannot make
-a key look live or expired.
+**Time is server-sourced.** Every handler reads `Date.now()` itself; `begin`,
+`complete` and `get` accept no caller-supplied `now`, so a skewed or hostile
+client clock cannot make a key look live or expired. The one time input is
+`purge`'s optional `before` cutoff (see below).
 
 **Result validation.** When `resultValidator` is set it runs at the client
 boundary: over the value written by `complete` (before storage) and over the
 value returned by `begin` (`done` replay) and `get`. It must return a typed
-`TResult` or throw. Omit it to leave results unvalidated.
+`TResult` or throw. A Zod `.parse` or a hand-written type guard fits
+(`convex/values` validators have no `.parse`). Omit it to leave results
+unvalidated.
 
 ## Mutations
 
@@ -101,8 +126,8 @@ winner's recorded outcome must not be overwritten by a late attempt, even after
 the grace window has lapsed. The `expired` reason applies only to inflight keys
 whose lease lapsed before completion.
 
-**`key` and `scope` must not be empty** (same errors as `begin`). `get` does
-not reject them: an empty key simply finds nothing.
+**`key` and `scope` must not be empty** (same errors as `begin`). `get` does not
+reject them: an empty key simply finds nothing.
 
 **`doneTtlMs` must be a positive finite number.** Passing `0`, a negative value,
 or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
@@ -115,29 +140,39 @@ or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 Delete up to `batch` keys whose `expiresAt < before`, oldest first via the
 `by_expires` index, and return the count removed in the first pass. If a full
 batch was removed the sweep self-reschedules through the component scheduler
-until the expired tail is clean. Idempotent — safe to run anytime. A built-in
-daily cron (`crons.ts`) drives this automatically; call `purge` directly only
-for an extra or custom-cadence sweep.
+until the expired tail is clean. Idempotent for a past cutoff: re-running it
+removes nothing new.
+
+**`before` is trusted as given.** A future `before` also deletes live keys
+(inflight and done), which lets the work run again. Omit it, or compute it on
+the server; never pass a value from client input. A built-in daily cron
+(`crons.ts`) drives this automatically; call `purge` directly only for an extra
+or custom-cadence sweep.
 
 ## Queries
 
 ### `get(ctx, key, scope?) → { status, result?, expiresAt } | null`
 
-The stored state for `key` in `scope`, or `null` if no key is held. `status` is
+The stored state for `key` in `scope`, or `null` if no row exists. `status` is
 `inflight` or `done`; `result` is present only when `done` (validated);
 `expiresAt` is the absolute ms timestamp after which the key may be re-minted.
+`scope` defaults to the client's `defaultScope`.
+
+`get` does not filter by time: an expired row is still returned until `purge`
+deletes it or `begin` re-mints it. Compare `expiresAt` with the current time if
+you need to know whether it is still live.
 
 ## Error codes
 
 Invalid arguments throw a `ConvexError` whose `data.code` is one of:
 
-| Code            | Thrown by            | Cause                                                              |
-| --------------- | -------------------- | ------------------------------------------------------------------ |
-| `INVALID_KEY`   | `begin`, `complete`  | `key` is the empty string                                          |
-| `INVALID_SCOPE` | `begin`, `complete`  | `scope` is the empty string                                        |
-| `INVALID_TTL`   | `begin`, `complete`  | `inflightTtlMs` / `doneTtlMs` is zero, negative, `NaN` or infinite |
-| `INVALID_BATCH` | `purge`              | `batch` is not an integer between 1 and 500                        |
-| `INVALID_BEFORE` | `purge`              | `before` is not finite                                             |
+| Code             | Thrown by           | Cause                                                              |
+| ---------------- | ------------------- | ------------------------------------------------------------------ |
+| `INVALID_KEY`    | `begin`, `complete` | `key` is the empty string                                          |
+| `INVALID_SCOPE`  | `begin`, `complete` | `scope` is the empty string                                        |
+| `INVALID_TTL`    | `begin`, `complete` | `inflightTtlMs` / `doneTtlMs` is zero, negative, `NaN` or infinite |
+| `INVALID_BATCH`  | `purge`             | `batch` is not an integer between 1 and 500                        |
+| `INVALID_BEFORE` | `purge`             | `before` is not finite                                             |
 
 Auth and ownership are the host's job: a component cannot read `ctx.auth`, so
 authorize the caller and derive `key`/`scope` before calling the client.

@@ -3,8 +3,9 @@
 /**
  * Validates and narrows an opaque stored `result` to the host's `TResult` at the
  * client boundary. Receives the raw value the component replayed (`unknown`) and
- * MUST return a typed `TResult` or throw. A `convex/values` validator's `.parse`
- * (or a Zod `.parse`) fits directly; omit it to keep results unvalidated.
+ * MUST return a typed `TResult` or throw. A Zod `.parse` or a hand-written type
+ * guard fits directly (`convex/values` validators have no `.parse`); omit it to
+ * keep results unvalidated.
  *
  * @typeParam TResult - The host's stored outcome type.
  */
@@ -44,7 +45,8 @@ export type CompleteResult =
       recorded: false;
       /**
        * `missing` — no key for this id/scope. `expired` — the inflight lease
-       * lapsed before completion. `already_done` — a prior attempt won the race.
+       * lapsed before completion. `superseded` — a newer claim replaced this
+       * worker's lease. `already_done` — a prior attempt won the race.
        */
       reason: "missing" | "expired" | "superseded" | "already_done";
     };

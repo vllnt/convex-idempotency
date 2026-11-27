@@ -284,9 +284,33 @@ describe("idempotency — get projection", () => {
     expect(done?.status).toBe("done");
     expect(done?.result).toBe(7);
   });
+
+  test("get still returns an expired row until purge removes it", async () => {
+    const t = setup();
+    await t.mutation(api.example.begin, { key: "op_x", inflightTtlMs: 10 });
+    vi.setSystemTime(1_000);
+    const stale = await t.query(api.example.get, { key: "op_x" });
+    expect(stale).toMatchObject({ status: "inflight", expiresAt: 10 });
+    await t.mutation(api.example.purge, { batch: 200 });
+    expect(await t.query(api.example.get, { key: "op_x" })).toBeNull();
+  });
 });
 
 describe("idempotency — purge (bounded + self-rescheduling)", () => {
+  test("purge with a future cutoff also deletes a live key", async () => {
+    const t = setup();
+    await t.mutation(api.example.begin, { key: "live_done" });
+    await t.mutation(api.example.complete, { key: "live_done", result: 1 });
+    const removed = await t.mutation(api.example.purge, {
+      before: 1_000_000_000,
+      batch: 200,
+    });
+    expect(removed).toBe(1);
+    expect(await t.mutation(api.example.begin, { key: "live_done" })).toMatchObject({
+      state: "fresh",
+    });
+  });
+
   test("purge removes only keys expired before the cutoff and returns the count", async () => {
     const t = setup();
     await t.mutation(api.example.begin, { key: "stale", inflightTtlMs: 10 }); // expiresAt 10

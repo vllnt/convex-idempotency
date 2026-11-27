@@ -61,6 +61,13 @@ pnpm add @vllnt/convex-idempotency
 
 Requires `convex@^1.45.0`.
 
+### For coding agents
+
+The docs are bundled in the npm package:
+`node_modules/@vllnt/convex-idempotency/docs/API.md`, with `README.md`,
+`CHANGELOG.md`, `llms.txt` and the typed `src/` at the package root. They match
+the installed version. Read them before writing code.
+
 ## Usage
 
 ```ts
@@ -173,20 +180,34 @@ const t = convexTest(schema, import.meta.glob("./**/*.ts"));
 register(t);
 ```
 
+## Related packages
+
+These components dedup their own writes with a built-in idempotency key. Use
+them for their domain; use this ledger for any other retried operation.
+
+- [`@vllnt/convex-email`](https://oss.vllnt.com/packages/convex-email) —
+  outbound email queue; its `idempotencyKey` dedups a re-enqueued message.
+- [`@vllnt/convex-metering`](https://oss.vllnt.com/packages/convex-metering) —
+  metered usage; its `idempotencyKey` stops a retry from double-counting.
+- [`@vllnt/convex-wallet`](https://oss.vllnt.com/packages/convex-wallet) —
+  balances; `grant` / `spend` credit or debit once per `idempotencyKey`.
+
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+See
+[CONTRIBUTING.md](https://github.com/vllnt/convex-idempotency/blob/main/CONTRIBUTING.md).
 
 ## Author
 
 Built by [bntvllnt](https://github.com/bntvllnt) ·
 [bntvllnt.com](https://bntvllnt.com) · [X @bntvllnt](https://x.com/bntvllnt)
 
-Part of the [@vllnt](https://github.com/vllnt) Convex component fleet —
-[vllnt.com](https://vllnt.com)
-
 If this is useful, [sponsor the work](https://github.com/sponsors/bntvllnt).
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+Part of vllnt oss: https://oss.vllnt.com

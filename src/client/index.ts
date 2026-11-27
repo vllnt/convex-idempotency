@@ -105,7 +105,7 @@ interface CompleteOptions {
 }
 
 /**
- * Consumer-facing client for the exactly-once idempotency key ledger. The host
+ * Consumer-facing client for the lease-based idempotency key ledger. The host
  * owns meaning and auth; it passes an opaque `key` and an optional `scope`, and
  * stores an arbitrary `TResult` outcome that replays return verbatim. Pass a
  * `resultValidator` to narrow the opaque stored value to `TResult` at the
@@ -116,7 +116,7 @@ interface CompleteOptions {
  * @example
  * ```ts
  * const idem = new Idempotency(components.idempotency, {
- *   resultValidator: v.object({ chargeId: v.string() }).parse,
+ *   resultValidator: ChargeResult.parse, // e.g. a Zod schema, or a hand-written guard
  * });
  * const r = await idem.begin(ctx, requestId);
  * if (r.state === "done") return r.result;                  // typed replay
@@ -189,8 +189,8 @@ export class Idempotency<TResult = unknown> {
    * Mark `key` `done`, recording `result` and extending the done grace window.
    * Returns a discriminated outcome: `recorded: true` on success, or
    * `recorded: false` with a `reason` when the claim was lost (missing, expired,
-   * or already done) so the host can react to dropped work. `result` is validated
-   * against the host validator before it is stored.
+   * superseded, or already done) so the host can react to dropped work.
+   * `result` is validated against the host validator before it is stored.
    */
   complete(
     ctx: RunMutationCtx,
@@ -232,8 +232,9 @@ export class Idempotency<TResult = unknown> {
 
   /**
    * Delete expired keys in bounded batches, oldest first. `before` defaults to
-   * the server clock; `batch` caps each pass and the sweep self-reschedules until
-   * the tail is clean. Returns the count removed in the first pass.
+   * the server clock (a future `before` also deletes live keys); `batch` caps
+   * each pass and the sweep self-reschedules until the tail is clean. Returns
+   * the count removed in the first pass.
    */
   purge(
     ctx: RunMutationCtx,

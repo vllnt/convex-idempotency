@@ -17,12 +17,27 @@ All notable changes to this project are documented here. The format is based on
 ### Documentation
 
 - Document the error codes in `docs/API.md` and how to use `/test` in a consuming app.
+- The npm package now ships `docs/API.md`, `CHANGELOG.md` and `llms.txt`, so coding agents can
+  read docs that match the installed version under `node_modules/@vllnt/convex-idempotency/`.
+  `llms.txt` links the bundled files relatively and adds a "For coding agents" note and an
+  ecosystem link; the README adds the same note and a "Related packages" section.
+- `docs/API.md` lists the package entry points and notes that `get` returns an expired row until
+  it is purged or re-minted, and that a future `purge` `before` cutoff also deletes live keys.
+  TSDoc no longer suggests a `convex/values` `.parse` for `resultValidator` and lists the
+  `superseded` completion reason. The package description says "lease-based" instead of
+  "exactly-once", matching the README's side-effect caveat.
 
 ### Changed
 
 - Releases run only from `.github/workflows/publish.yml` (npm trusted publishing with provenance,
   stable `@latest` from a `vX.Y.Z` tag on `main`); local publish scripts were removed.
 - Move to pnpm 10 with a seven-day release-age gate, and add low-memory dev defaults.
+- Canary builds publish on every push to `main` that changes the package or its shipped docs,
+  under the `canary` dist-tag only; the repository-variable gate was removed.
+- `pnpm test:package` (run in CI) fails when a required file is missing from the npm tarball, a
+  contributor or test file would ship, or an `llms.txt` link does not resolve inside it.
+- `package.json` `homepage` points to `https://oss.vllnt.com/packages/convex-idempotency`, with
+  more keywords.
 
 ## [0.1.0] - 2026-09-01
 

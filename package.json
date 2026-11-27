@@ -1,15 +1,19 @@
 {
   "name": "@vllnt/convex-idempotency",
   "version": "0.1.1",
-  "description": "Exactly-once idempotency key ledger for retried operations, as a Convex component",
+  "description": "Lease-based idempotency key ledger for retried operations, as a Convex component",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.34.8",
   "files": [
     "dist",
     "src",
+    "docs/API.md",
+    "CHANGELOG.md",
+    "llms.txt",
     "!src/**/*.test.*",
-    "!src/**/*.spec.*"],
+    "!src/**/*.spec.*"
+  ],
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -45,6 +49,7 @@
     "test:watch": "vitest --typecheck --clearScreen false",
     "test:coverage": "vitest run --coverage --coverage.reporter=text",
     "generate:llms": "node scripts/generate-llms.mjs",
+    "test:package": "node scripts/test-package.mjs",
     "preversion": "pnpm install --frozen-lockfile && pnpm build && pnpm test:coverage && pnpm typecheck && pnpm generate:llms",
     "check:agents": "node -e \"const f=require('node:fs');if(!f.existsSync('AGENTS.md')||f.existsSync('CLAUDE.md')||f.existsSync('.claude'))process.exit(1)\"",
     "codegen": "pnpm convex codegen --component-dir ./src/component"
@@ -81,7 +86,7 @@
       "handlebars@<4.7.10": "4.7.10"
     }
   },
-  "homepage": "https://github.com/vllnt/convex-idempotency#readme",
+  "homepage": "https://oss.vllnt.com/packages/convex-idempotency",
   "bugs": {
     "url": "https://github.com/vllnt/convex-idempotency/issues"
   },
@@ -107,6 +112,10 @@
   "keywords": [
     "convex",
     "convex-component",
-    "idempotency"
+    "idempotency",
+    "idempotency-key",
+    "deduplication",
+    "retries",
+    "lease"
   ]
 }

@@ -10,7 +10,7 @@ Convex agent skills for common tasks can be installed by running `npx convex ai-
 
 # @vllnt/convex-idempotency
 
-Exactly-once idempotency key ledger for retried operations, as a Convex component. It follows the
+Lease-based idempotency key ledger for retried operations, as a Convex component. It follows the
 vllnt Component Standard (see the `oss-packages` hub `AGENTS.md`).
 
 ## Agent instructions
@@ -45,7 +45,8 @@ the host narrows it via a `resultValidator` at the client boundary.
 **Component owns:**
 
 - The dedup ledger (`keys` table) — mint, expire, purge
-- Server-sourced time — `Date.now()` inside every handler; no caller-supplied `now`
+- Server-sourced time — `Date.now()` inside every handler; no caller-supplied `now` (the only
+  time input is `purge`'s optional `before` cutoff)
 - TTL validation — `inflightTtlMs` / `doneTtlMs` must be positive finite numbers
 - Lifecycle: `absent → inflight → done → expired → re-minted`
 - The discriminated return shapes (`BeginResult`, `CompleteResult`)
@@ -74,8 +75,9 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
   keys whose lease lapsed before completion.
 
 - **Server-sourced time:** every handler calls `Date.now()` internally; no API surface accepts a
-  caller-supplied `now`. A hostile or skewed client clock cannot force a key to look live (hijack a
-  replay) or expired (bypass dedup).
+  caller-supplied `now` (`purge`'s optional `before` cutoff is the one time input, trusted as
+  given; a future value deletes live keys). A hostile or skewed client clock cannot force a key to
+  look live (hijack a replay) or expired (bypass dedup).
 
 - **Empty key/scope guard:** `begin` and `complete` reject an empty `key` (`INVALID_KEY`) or
   `scope` (`INVALID_SCOPE`) before any write. `get` stays permissive (reactive queries).
@@ -92,8 +94,8 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
 
 - **Bounded purge + self-reschedule:** `purge` removes up to `batch` expired keys (default 200) per
   pass and self-reschedules via `ctx.scheduler` when a full batch was removed, running until the
-  tail is clean. Idempotent and safe to call anytime. The built-in daily cron drives it
-  automatically.
+  tail is clean. Idempotent for a past cutoff; a future `before` also deletes live keys. The
+  built-in daily cron drives it automatically.
 
 - **Backend-only (no `./react` entry):** pure infra dedup — no user-facing reactive surface. No
   hooks or client components shipped. This was an explicit analysis decision (see README).
@@ -117,6 +119,7 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
 | Error codes | `docs/API.md` → `## Error codes` table |
 | `peerDependencies.convex` version | `llms.txt` context line (`convex@^X.Y.Z`), `docs/API.md` Compatibility line, README Installation peer note |
 | Lifecycle / expiry asymmetry | `docs/API.md` begin/complete sections, Key design decisions above |
+| Shipped files (`package.json` `files`) | `scripts/test-package.mjs` required list; run `pnpm build && pnpm test:package` |
 | Any change | `pnpm generate:llms` to check the `llms.txt` links |
 
 Grep old values before committing (e.g. `git grep "1.36.1"` → must be empty).

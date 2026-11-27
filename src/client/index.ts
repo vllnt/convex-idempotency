@@ -91,17 +91,17 @@ interface RunMutationCtx {
 
 /** Per-call overrides for `scope` and the inflight lease. */
 interface BeginOptions {
-  scope?: string;
-  inflightTtlMs?: number;
+  scope?: string | undefined;
+  inflightTtlMs?: number | undefined;
 }
 
 /** Per-call overrides for `scope`, the done grace window, and lost-claim upsert. */
 interface CompleteOptions {
-  scope?: string;
+  scope?: string | undefined;
   /** Fencing token returned by the successful `begin` claim. */
-  claimId?: string;
-  doneTtlMs?: number;
-  upsertOnMissing?: boolean;
+  claimId?: string | undefined;
+  doneTtlMs?: number | undefined;
+  upsertOnMissing?: boolean | undefined;
 }
 
 /**
@@ -180,7 +180,10 @@ export class Idempotency<TResult = unknown> {
       inflightTtlMs: opts.inflightTtlMs ?? this.defaultInflightTtlMs,
     });
     if (r.state === "done") {
-      return { state: "done", result: this.parseResult(r.result) };
+      const result = this.parseResult(r.result);
+      return result === undefined
+        ? { state: "done" }
+        : { state: "done", result };
     }
     return r;
   }
@@ -203,8 +206,8 @@ export class Idempotency<TResult = unknown> {
     return ctx.runMutation(this.component.mutations.complete, {
       key,
       scope: this.scopeOf(opts.scope),
-      result: validated,
-      claimId: opts.claimId,
+      ...(validated === undefined ? {} : { result: validated }),
+      ...(opts.claimId === undefined ? {} : { claimId: opts.claimId }),
       doneTtlMs: opts.doneTtlMs ?? this.defaultDoneTtlMs,
       upsertOnMissing: opts.upsertOnMissing ?? this.defaultUpsertOnMissing,
     });
@@ -223,9 +226,10 @@ export class Idempotency<TResult = unknown> {
     if (row === null) {
       return null;
     }
+    const result = this.parseResult(row.result);
     return {
       status: row.status,
-      result: this.parseResult(row.result),
+      ...(result === undefined ? {} : { result }),
       expiresAt: row.expiresAt,
     };
   }
@@ -238,10 +242,10 @@ export class Idempotency<TResult = unknown> {
    */
   purge(
     ctx: RunMutationCtx,
-    opts: { before?: number; batch?: number } = {},
+    opts: { before?: number | undefined; batch?: number | undefined } = {},
   ): Promise<number> {
     return ctx.runMutation(this.component.mutations.purge, {
-      before: opts.before,
+      ...(opts.before === undefined ? {} : { before: opts.before }),
       batch: opts.batch ?? DEFAULT_PURGE_BATCH,
     });
   }

@@ -67,6 +67,11 @@ unvalidated.
 
 ## Mutations
 
+Every optional field in `opts`, and in the constructor options, also accepts an
+explicit `undefined`, treated the same as leaving the field out (so the default
+applies where there is one). So a host can pass `v.optional(...)` arguments
+straight through, even with `exactOptionalPropertyTypes` on.
+
 ### `begin(ctx, key, opts?) → BeginResult`
 
 `opts`: `{ scope?: string; inflightTtlMs?: number }`.

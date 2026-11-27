@@ -7,6 +7,11 @@ export default defineConfig({
     environment: "edge-runtime",
     exclude: ["**/node_modules/**", "dist/**"],
     typecheck: {
+      // Type tests (`*.test-d.ts`) run with every `vitest run`, so CI enforces them.
+      // `pnpm typecheck:ci` also checks this tsconfig, so source errors fail CI even
+      // without a type-test file.
+      enabled: true,
+      include: ["**/*.test-d.ts"],
       tsconfig: "./tsconfig.test.json",
     },
     coverage: {

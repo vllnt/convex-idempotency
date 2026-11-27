@@ -4,7 +4,7 @@
   "description": "Lease-based idempotency key ledger for retried operations, as a Convex component",
   "license": "MIT",
   "type": "module",
-  "packageManager": "pnpm@10.34.8",
+  "packageManager": "pnpm@10.34.9",
   "files": [
     "dist",
     "src",
@@ -43,7 +43,7 @@
     "build:codegen": "pnpm codegen && pnpm build",
     "build:clean": "rm -rf dist *.tsbuildinfo && pnpm build:codegen",
     "typecheck": "tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/typecheck.tsbuildinfo",
-    "typecheck:ci": "tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/typecheck-ci.tsbuildinfo --project tsconfig.ci.json",
+    "typecheck:ci": "tsc --noEmit --incremental --tsBuildInfoFile node_modules/.cache/tsc/typecheck-ci.tsbuildinfo --project tsconfig.ci.json && tsc --noEmit --project tsconfig.test.json",
     "lint": "pnpm check:agents && eslint --cache --cache-location node_modules/.cache/eslint/ .",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest --typecheck --clearScreen false",
@@ -60,16 +60,16 @@
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
     "@typescript/native": "npm:typescript@7.0.2",
-    "@vitest/coverage-v8": "^5.1.0",
+    "@vitest/coverage-v8": "^5.1.1",
     "@vllnt/eslint-config": "2.1.0",
-    "@vllnt/typescript": "2.0.0",
-    "convex": "^1.50.0",
-    "convex-test": "^0.0.71",
-    "eslint": "^9.39.5",
+    "@vllnt/typescript": "3.0.0",
+    "convex": "^1.51.0",
+    "convex-test": "^0.0.73",
+    "eslint": "^10.15.0",
     "prettier": "^3.10.1",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.3.8",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "pnpm": {
     "minimumReleaseAge": 10080,
@@ -80,7 +80,7 @@
       "esbuild"
     ],
     "overrides": {
-      "minimatch@>=7.0.0 <11.0.1": "11.0.5",
+      "minimatch@>=7.0.0 <11.0.1": "11.0.9",
       "deepmerge-ts@<8.0.0": "8.0.2",
       "esbuild@>=0.27.3 <0.28.1": "0.28.1",
       "handlebars@<4.7.10": "4.7.10"

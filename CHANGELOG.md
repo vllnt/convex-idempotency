@@ -10,6 +10,10 @@ All notable changes to this project are documented here. The format is based on
 
 - `begin` and `complete` reject an empty `key` or `scope` with
   `ConvexError({ code: "INVALID_KEY" | "INVALID_SCOPE" })` instead of storing an unusable row.
+- The optional fields of the constructor options and of the `begin`, `complete` and `purge`
+  options accept an explicit `undefined`. Hosts that turn on `exactOptionalPropertyTypes` can pass
+  `v.optional(...)` arguments straight through instead of getting TS2379. Types only widen, so
+  every call that compiled against 0.1.0 still compiles.
 - `@vllnt/convex-idempotency/test` and the component sources now use explicit `.js` relative
   imports and reference `vite/client`, so they type-check for consumers under both `bundler` and
   `nodenext` module resolution.
@@ -38,6 +42,14 @@ All notable changes to this project are documented here. The format is based on
   contributor or test file would ship, or an `llms.txt` link does not resolve inside it.
 - `package.json` `homepage` points to `https://oss.vllnt.com/packages/convex-idempotency`, with
   more keywords.
+- Development dependencies upgraded: `convex` 1.51, `convex-test` 0.0.73, `eslint` 10,
+  `@vllnt/typescript` 3 (stricter compiler checks, including `exactOptionalPropertyTypes`),
+  `vitest` 5.1.1, pnpm 10.34.9, and the `minimatch` override to 11.0.9. The `convex` peer range
+  stays `^1.45.0`.
+- `begin` (on `done`) and `get` leave the `result` key out when no result is stored, instead of
+  setting it to `undefined`. The value read is the same; only same-process checks such as
+  `"result" in r` or `toStrictEqual` see the difference.
+- Type tests (`*.test-d.ts`) now run with every `vitest run`, so CI type-checks the example app.
 
 ## [0.1.0] - 2026-09-01
 

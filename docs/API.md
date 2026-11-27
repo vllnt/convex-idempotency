@@ -140,8 +140,8 @@ or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 Delete up to `batch` keys whose `expiresAt < before`, oldest first via the
 `by_expires` index, and return the count removed in the first pass. If a full
 batch was removed the sweep self-reschedules through the component scheduler
-until the expired tail is clean. Idempotent — re-running with the same cutoff
-removes nothing new.
+until the expired tail is clean. Idempotent for a past cutoff:
+re-running it removes nothing new.
 
 **`before` is trusted as given.** A future `before` also deletes live keys
 (inflight and done), which lets the work run again. Omit it, or compute it on

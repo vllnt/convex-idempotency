@@ -213,8 +213,8 @@ export const complete = mutation({
  * An explicit `before` is trusted as given: a future cutoff also deletes live
  * keys, so never derive it from untrusted input. If a full batch was removed
  * there may be more, so the sweep self-reschedules through `ctx.scheduler` until
- * a short batch signals the tail is clean. Idempotent: re-running with the same
- * cutoff removes nothing new.
+ * a short batch signals the tail is clean. Idempotent for a past cutoff:
+ * re-running it removes nothing new.
  */
 export const purge = mutation({
   args: { before: v.optional(v.number()), batch: v.number() },

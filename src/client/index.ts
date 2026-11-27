@@ -105,7 +105,7 @@ interface CompleteOptions {
 }
 
 /**
- * Consumer-facing client for the exactly-once idempotency key ledger. The host
+ * Consumer-facing client for the lease-based idempotency key ledger. The host
  * owns meaning and auth; it passes an opaque `key` and an optional `scope`, and
  * stores an arbitrary `TResult` outcome that replays return verbatim. Pass a
  * `resultValidator` to narrow the opaque stored value to `TResult` at the
@@ -232,8 +232,9 @@ export class Idempotency<TResult = unknown> {
 
   /**
    * Delete expired keys in bounded batches, oldest first. `before` defaults to
-   * the server clock (a future `before` also deletes live keys); `batch` caps each pass and the sweep self-reschedules until
-   * the tail is clean. Returns the count removed in the first pass.
+   * the server clock (a future `before` also deletes live keys); `batch` caps
+   * each pass and the sweep self-reschedules until the tail is clean. Returns
+   * the count removed in the first pass.
    */
   purge(
     ctx: RunMutationCtx,

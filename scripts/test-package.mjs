@@ -8,17 +8,33 @@ import process from "node:process";
  * package.json "exports" point at live in dist/ and src/.
  *
  * Fails when a required file is missing or empty, when anything outside the
- * expected layout or doc set would ship (contributor or internal docs), or when
- * llms.txt is missing its agent notes or links outside the tarball.
+ * expected layout would ship (contributor or internal docs, non-code files in
+ * dist/ or src/), or when llms.txt is missing its agent notes and ecosystem link
+ * or links outside the tarball.
  * Test files and the privacy scan are covered by check-package-contents.sh.
  */
 
-const DOCS = ["README.md", "LICENSE", "CHANGELOG.md", "llms.txt", "docs/API.md"];
+const DOCS = [
+  "README.md",
+  "LICENSE",
+  "CHANGELOG.md",
+  "llms.txt",
+  "docs/API.md",
+];
 
 /** The only top-level entries the tarball may contain. */
 const TOP_LEVEL = new Set(["package.json", "dist", "src", "docs", ...DOCS]);
 
-const REPO_BLOB = /^https:\/\/github\.com\/vllnt\/convex-idempotency\/blob\/[^/]+\/(.+)$/;
+/** Allowed file types inside the code directories. */
+const CODE_FILES = {
+  dist: /\.(js|d\.ts|js\.map|d\.ts\.map)$/,
+  src: /\.ts$/,
+};
+
+const ECOSYSTEM_LINK = "](https://oss.vllnt.com/llms.txt)";
+
+const REPO_BLOB =
+  /^https:\/\/github\.com\/vllnt\/convex-idempotency\/blob\/[^/]+\/(.+)$/;
 
 /** @param {unknown} value @returns {string[]} every string leaf of an "exports" map */
 function exportTargets(value) {
@@ -54,9 +70,13 @@ for (const path of required) {
 }
 
 for (const path of packed.keys()) {
-  if (!TOP_LEVEL.has(path.split("/")[0])) {
+  const top = path.split("/")[0];
+  const codePattern = CODE_FILES[top];
+  if (!TOP_LEVEL.has(top)) {
     problems.push(`must not ship: ${path}`);
-  } else if (/\.(md|mdx|txt)$/i.test(path) && !DOCS.includes(path)) {
+  } else if (codePattern !== undefined && !codePattern.test(path)) {
+    problems.push(`must not ship (not a code file): ${path}`);
+  } else if (top === "docs" && !DOCS.includes(path)) {
     problems.push(`must not ship (not a published doc): ${path}`);
   }
 }
@@ -64,7 +84,11 @@ for (const path of packed.keys()) {
 if (packed.has("llms.txt")) {
   const llms = readFileSync("llms.txt", "utf8");
   for (const heading of ["## For coding agents", "## Ecosystem"]) {
-    if (!llms.includes(`\n${heading}\n`)) problems.push(`llms.txt lacks "${heading}"`);
+    if (!llms.includes(`\n${heading}\n`))
+      problems.push(`llms.txt lacks "${heading}"`);
+  }
+  if (!llms.includes(ECOSYSTEM_LINK)) {
+    problems.push("llms.txt lacks the https://oss.vllnt.com/llms.txt link");
   }
   for (const [, link] of llms.matchAll(/\]\(([^)]+)\)/g)) {
     const target = link.split("#")[0];
@@ -85,4 +109,6 @@ if (problems.length > 0) {
   for (const problem of problems) console.error(`FAIL ${problem}`);
   process.exit(1);
 }
-console.log(`OK    package: ${packed.size} files, ${required.size} required present`);
+console.log(
+  `OK    package: ${packed.size} files, ${required.size} required present`,
+);

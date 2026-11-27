@@ -8,10 +8,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
-- `begin` and `complete` reject an empty `key` or `scope` with
-  `ConvexError({ code: "INVALID_KEY" | "INVALID_SCOPE" })` instead of accepting it. In 0.1.0
-  every call with an empty key or scope shared one row, so unrelated requests replayed each
-  other's result. Calls that pass `""`, including `defaultScope: ""`, now throw.
+- `begin` and `complete` reject an empty `key` with `ConvexError({ code: "INVALID_KEY" })`. In
+  0.1.0 all calls with an empty key in the same scope shared one row, so unrelated requests
+  replayed each other's result.
 - The optional fields of the constructor options and of the `begin`, `complete` and `purge`
   options accept an explicit `undefined`. Hosts that turn on `exactOptionalPropertyTypes` can pass
   `v.optional(...)` arguments straight through instead of getting TS2379. Types only widen, so
@@ -38,6 +37,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Behavior change: `begin` and `complete` also reject an empty `scope` with
+  `ConvexError({ code: "INVALID_SCOPE" })`, including for a client built with
+  `defaultScope: ""`. An empty scope did not collide in 0.1.0, so a host that used one must pass
+  a non-empty scope. `get` still accepts an empty key or scope.
 - Releases run only from `.github/workflows/publish.yml` (npm trusted publishing with provenance,
   stable `@latest` from a `vX.Y.Z` tag on `main`); local publish scripts were removed.
 - Move to pnpm 10 with a seven-day release-age gate, and add low-memory dev defaults.

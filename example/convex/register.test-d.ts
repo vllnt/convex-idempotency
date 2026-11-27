@@ -1,4 +1,5 @@
 import { convexTest } from "convex-test";
+import type { TestConvex } from "convex-test";
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { expectTypeOf, test } from "vitest";
@@ -10,6 +11,8 @@ import schema from "./schema";
  * `convex-test` instance built from its own schema, which has its own tables
  * and none of the component's.
  */
+type RegisterTarget = Parameters<typeof register>[0];
+
 test("register accepts the example app's schema", () => {
   const t = convexTest(schema, {});
   expectTypeOf(register).toBeCallableWith(t);
@@ -27,17 +30,20 @@ test("register accepts a host schema with unrelated tables and indexes", () => {
   expectTypeOf(register).toBeCallableWith(t);
 });
 
-test("register accepts a schema built without schema validation", () => {
-  const t = convexTest(
-    defineSchema(
-      { notes: defineTable({ body: v.string() }) },
-      { schemaValidation: false },
-    ),
-    {},
+test("register accepts loose table names and an explicitly typed instance", () => {
+  const loose = defineSchema(
+    { notes: defineTable({ body: v.string() }) },
+    { strictTableNameTypes: false },
   );
-  expectTypeOf(register).toBeCallableWith(t);
+  expectTypeOf(register).toBeCallableWith(convexTest(loose, {}));
+  expectTypeOf<TestConvex<typeof schema>>().toExtend<RegisterTarget>();
+  expectTypeOf<TestConvex<typeof loose>>().toExtend<RegisterTarget>();
 });
 
-test("register still rejects a value that is not a convex-test instance", () => {
-  expectTypeOf(register).parameter(0).not.toEqualTypeOf<string>();
+test("register rejects values that are not a convex-test instance", () => {
+  expectTypeOf<RegisterTarget>().not.toBeAny();
+  expectTypeOf<string>().not.toExtend<RegisterTarget>();
+  expectTypeOf<
+    ReturnType<TestConvex<typeof schema>["withIdentity"]>
+  >().not.toExtend<RegisterTarget>();
 });

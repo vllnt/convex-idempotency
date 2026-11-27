@@ -9,7 +9,9 @@ All notable changes to this project are documented here. The format is based on
 ### Fixed
 
 - `begin` and `complete` reject an empty `key` or `scope` with
-  `ConvexError({ code: "INVALID_KEY" | "INVALID_SCOPE" })` instead of storing an unusable row.
+  `ConvexError({ code: "INVALID_KEY" | "INVALID_SCOPE" })` instead of accepting it. In 0.1.0
+  every call with an empty key or scope shared one row, so unrelated requests replayed each
+  other's result. Calls that pass `""`, including `defaultScope: ""`, now throw.
 - The optional fields of the constructor options and of the `begin`, `complete` and `purge`
   options accept an explicit `undefined`. Hosts that turn on `exactOptionalPropertyTypes` can pass
   `v.optional(...)` arguments straight through instead of getting TS2379. Types only widen, so
@@ -42,7 +44,8 @@ All notable changes to this project are documented here. The format is based on
 - Canary builds publish on every push to `main` that changes the package or its shipped docs,
   under the `canary` dist-tag only; the repository-variable gate was removed.
 - `pnpm test:package` (run in CI) fails when a required file is missing from the npm tarball, a
-  contributor or test file would ship, or an `llms.txt` link does not resolve inside it.
+  contributor file would ship, or an `llms.txt` link does not resolve inside it. Test files and
+  the privacy scan are checked by `scripts/check-package-contents.sh` before every publish.
 - `package.json` `homepage` points to `https://oss.vllnt.com/packages/convex-idempotency`, with
   more keywords.
 - Development dependencies upgraded: `convex` 1.51, `convex-test` 0.0.73, `eslint` 10,

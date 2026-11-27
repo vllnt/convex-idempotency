@@ -4,16 +4,20 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - Unreleased
+## [0.1.1] - 2026-11-27
 
 ### Fixed
 
-- `begin` and `complete` reject an empty `key` or `scope` with
-  `ConvexError({ code: "INVALID_KEY" | "INVALID_SCOPE" })` instead of storing an unusable row.
+- `begin` and `complete` reject an empty `key` with `ConvexError({ code: "INVALID_KEY" })`. In
+  0.1.0 all calls with an empty key in the same scope shared one row, so unrelated requests
+  replayed each other's result.
 - The optional fields of the constructor options and of the `begin`, `complete` and `purge`
   options accept an explicit `undefined`. Hosts that turn on `exactOptionalPropertyTypes` can pass
   `v.optional(...)` arguments straight through instead of getting TS2379. Types only widen, so
   every call that compiled against 0.1.0 still compiles.
+- `register(t)` from `@vllnt/convex-idempotency/test` accepts a `convex-test` instance built
+  from the host app's own schema. It was typed for the component's schema only, so a host schema
+  with its own tables failed with TS2345. Types only; nothing changes at runtime.
 - `@vllnt/convex-idempotency/test` and the component sources now use explicit `.js` relative
   imports and reference `vite/client`, so they type-check for consumers under both `bundler` and
   `nodenext` module resolution.
@@ -33,13 +37,18 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed
 
+- Behavior change: `begin` and `complete` also reject an empty `scope` with
+  `ConvexError({ code: "INVALID_SCOPE" })`, including for a client built with
+  `defaultScope: ""`. An empty scope did not collide in 0.1.0, so a host that used one must pass
+  a non-empty scope. `get` still accepts an empty key or scope.
 - Releases run only from `.github/workflows/publish.yml` (npm trusted publishing with provenance,
   stable `@latest` from a `vX.Y.Z` tag on `main`); local publish scripts were removed.
 - Move to pnpm 10 with a seven-day release-age gate, and add low-memory dev defaults.
 - Canary builds publish on every push to `main` that changes the package or its shipped docs,
   under the `canary` dist-tag only; the repository-variable gate was removed.
 - `pnpm test:package` (run in CI) fails when a required file is missing from the npm tarball, a
-  contributor or test file would ship, or an `llms.txt` link does not resolve inside it.
+  contributor file would ship, or an `llms.txt` link does not resolve inside it. Test files and
+  the privacy scan are checked by `scripts/check-package-contents.sh` before every publish.
 - `package.json` `homepage` points to `https://oss.vllnt.com/packages/convex-idempotency`, with
   more keywords.
 - Development dependencies upgraded: `convex` 1.51, `convex-test` 0.0.73, `eslint` 10,
@@ -50,6 +59,8 @@ All notable changes to this project are documented here. The format is based on
   setting it to `undefined`. The value read is the same; only same-process checks such as
   `"result" in r` or `toStrictEqual` see the difference.
 - Type tests (`*.test-d.ts`) now run with every `vitest run`, so CI type-checks the example app.
+- The publish workflow runs `pnpm test:package` in its quality gates, so a canary or stable
+  release no longer relies on PR CI for the tarball check.
 
 ## [0.1.0] - 2026-09-01
 

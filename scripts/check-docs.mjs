@@ -13,7 +13,7 @@ import process from "node:process";
  * every public export and every error code documented, and every
  * TypeScript example compiling against the built package.
  * Shipped docs: relative links and #anchors resolve, the llms.txt facts and
- * ecosystem block are present, and the domain vllnt.ai appears nowhere.
+ * ecosystem block are present, and the retired vllnt ".ai" domain appears nowhere.
  * Exports: each one has a TSDoc summary, and the main entry carries the
  * package-page `@see` link.
  */
@@ -259,10 +259,19 @@ for (const doc of SHIPPED_DOCS) {
   }
 }
 
-// The vllnt.ai domain appears in no shipped file.
-for (const path of packed) {
-  if (/vllnt\.ai\b/i.test(read(path)))
-    fail(`${path} mentions vllnt.ai; use vllnt.com`);
+// The retired vllnt ".ai" domain appears in no shipped or tracked file. It is
+// built from parts so this script does not contain it either.
+const retiredDomain = ["vllnt", "ai"].join(".");
+const retiredPattern = new RegExp(
+  `\\b${retiredDomain.replace(".", "\\.")}\\b`,
+  "i",
+);
+const tracked = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+  .split("\0")
+  .filter(Boolean);
+for (const path of new Set([...packed, ...tracked])) {
+  if (retiredPattern.test(read(path)))
+    fail(`${path} mentions ${retiredDomain}; use vllnt.com`);
 }
 
 // llms.txt carries the same facts and ends with the ecosystem block.

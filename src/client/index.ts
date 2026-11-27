@@ -91,17 +91,17 @@ interface RunMutationCtx {
 
 /** Per-call overrides for `scope` and the inflight lease. */
 interface BeginOptions {
-  scope?: string;
-  inflightTtlMs?: number;
+  scope?: string | undefined;
+  inflightTtlMs?: number | undefined;
 }
 
 /** Per-call overrides for `scope`, the done grace window, and lost-claim upsert. */
 interface CompleteOptions {
-  scope?: string;
+  scope?: string | undefined;
   /** Fencing token returned by the successful `begin` claim. */
-  claimId?: string;
-  doneTtlMs?: number;
-  upsertOnMissing?: boolean;
+  claimId?: string | undefined;
+  doneTtlMs?: number | undefined;
+  upsertOnMissing?: boolean | undefined;
 }
 
 /**
@@ -242,7 +242,7 @@ export class Idempotency<TResult = unknown> {
    */
   purge(
     ctx: RunMutationCtx,
-    opts: { before?: number; batch?: number } = {},
+    opts: { before?: number | undefined; batch?: number | undefined } = {},
   ): Promise<number> {
     return ctx.runMutation(this.component.mutations.purge, {
       ...(opts.before === undefined ? {} : { before: opts.before }),

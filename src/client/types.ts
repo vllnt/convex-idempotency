@@ -54,30 +54,30 @@ export type CompleteResult =
 /** Construction options for the {@link Idempotency} client. */
 export interface IdempotencyOptions<TResult> {
   /** Namespace applied when a call omits `scope`. Default `"global"`. */
-  defaultScope?: string;
+  defaultScope?: string | undefined;
   /**
    * Inflight lease (ms) applied by `begin` when a call omits `inflightTtlMs`.
    * Short by design so a crashed worker's claim self-heals. Default `60_000`.
    */
-  defaultInflightTtlMs?: number;
+  defaultInflightTtlMs?: number | undefined;
   /**
    * Grace window (ms) applied by `complete` when a call omits `doneTtlMs` —
    * how long a recorded outcome replays before the key may be re-minted.
    * Default `86_400_000` (24h).
    */
-  defaultDoneTtlMs?: number;
+  defaultDoneTtlMs?: number | undefined;
   /**
    * When set, `complete` upserts the key as `done` even if its inflight row had
    * vanished (`missing`/`expired`) — recording finished work rather than dropping
    * it. Default `false`. Overridable per `complete` call.
    */
-  upsertOnMissing?: boolean;
+  upsertOnMissing?: boolean | undefined;
   /**
    * Validates/narrows a stored `result` to `TResult` at the boundary. Applied to
    * the `result` returned by `begin` (`done` replay) and `get`, and to the
    * `result` passed into `complete` before it is stored. Throws on a mismatch.
    */
-  resultValidator?: ResultParser<TResult>;
+  resultValidator?: ResultParser<TResult> | undefined;
 }
 
 /** A key's stored state, as returned by {@link Idempotency.get}. */

@@ -7,6 +7,9 @@ export default defineConfig({
     environment: "edge-runtime",
     exclude: ["**/node_modules/**", "dist/**"],
     typecheck: {
+      // Type tests (`*.test-d.ts`) run with every `vitest run`, so CI enforces them.
+      enabled: true,
+      include: ["**/*.test-d.ts"],
       tsconfig: "./tsconfig.test.json",
     },
     coverage: {

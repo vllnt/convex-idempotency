@@ -76,8 +76,8 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
 
 - **Server-sourced time:** every handler calls `Date.now()` internally; no API surface accepts a
   caller-supplied `now` (`purge`'s optional `before` cutoff is the one time input, trusted as
-  given; a future value deletes live keys). A hostile or skewed client clock cannot force a key to look live (hijack a
-  replay) or expired (bypass dedup).
+  given; a future value deletes live keys). A hostile or skewed client clock cannot force a key to
+  look live (hijack a replay) or expired (bypass dedup).
 
 - **Empty key/scope guard:** `begin` and `complete` reject an empty `key` (`INVALID_KEY`) or
   `scope` (`INVALID_SCOPE`) before any write. `get` stays permissive (reactive queries).
@@ -94,8 +94,8 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
 
 - **Bounded purge + self-reschedule:** `purge` removes up to `batch` expired keys (default 200) per
   pass and self-reschedules via `ctx.scheduler` when a full batch was removed, running until the
-  tail is clean. Idempotent for a past cutoff; a future `before` also deletes live keys. The built-in daily cron drives it
-  automatically.
+  tail is clean. Idempotent for a past cutoff; a future `before` also deletes live keys. The
+  built-in daily cron drives it automatically.
 
 - **Backend-only (no `./react` entry):** pure infra dedup — no user-facing reactive surface. No
   hooks or client components shipped. This was an explicit analysis decision (see README).

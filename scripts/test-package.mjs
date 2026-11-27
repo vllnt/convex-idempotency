@@ -87,8 +87,11 @@ if (packed.has("llms.txt")) {
     if (!llms.includes(`\n${heading}\n`))
       problems.push(`llms.txt lacks "${heading}"`);
   }
-  if (!llms.includes(ECOSYSTEM_LINK)) {
-    problems.push("llms.txt lacks the https://oss.vllnt.com/llms.txt link");
+  const ecosystem = llms.split("\n## Ecosystem\n")[1]?.split("\n## ")[0] ?? "";
+  if (!ecosystem.includes(ECOSYSTEM_LINK)) {
+    problems.push(
+      "llms.txt Ecosystem lacks the https://oss.vllnt.com/llms.txt link",
+    );
   }
   for (const [, link] of llms.matchAll(/\]\(([^)]+)\)/g)) {
     const target = link.split("#")[0];

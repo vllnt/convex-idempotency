@@ -13,7 +13,7 @@ All notable changes to this project are documented here. The format is based on
 - The optional fields of the constructor options and of the `begin`, `complete` and `purge`
   options accept an explicit `undefined`. Hosts that turn on `exactOptionalPropertyTypes` can pass
   `v.optional(...)` arguments straight through instead of getting TS2379. Types only widen, so
-  existing code still compiles.
+  every call that compiled against 0.1.0 still compiles.
 - `@vllnt/convex-idempotency/test` and the component sources now use explicit `.js` relative
   imports and reference `vite/client`, so they type-check for consumers under both `bundler` and
   `nodenext` module resolution.

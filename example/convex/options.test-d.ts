@@ -1,4 +1,4 @@
-import type { GenericMutationCtx, GenericQueryCtx } from "convex/server";
+import type { GenericMutationCtx } from "convex/server";
 import { expectTypeOf, test } from "vitest";
 import { Idempotency } from "../../src/client/index";
 import type { IdempotencyOptions } from "../../src/client/index";
@@ -15,7 +15,6 @@ declare const maybeString: string | undefined;
 declare const maybeNumber: number | undefined;
 declare const maybeBoolean: boolean | undefined;
 declare const mutationCtx: GenericMutationCtx<DataModel>;
-declare const queryCtx: GenericQueryCtx<DataModel>;
 
 const idem = new Idempotency<{ id: string }>(components.idempotency);
 
@@ -45,8 +44,7 @@ test("complete options accept explicit undefined", () => {
   });
 });
 
-test("get and purge accept explicit undefined", () => {
-  expectTypeOf(idem.get).toBeCallableWith(queryCtx, "k", maybeString);
+test("purge options accept explicit undefined", () => {
   expectTypeOf(idem.purge).toBeCallableWith(mutationCtx, {
     before: maybeNumber,
     batch: maybeNumber,

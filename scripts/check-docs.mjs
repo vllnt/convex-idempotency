@@ -182,7 +182,10 @@ const quickStartBlocks = codeBlocks(readme).filter(
 const lastQuickStartLine =
   (quickStartBlocks.at(-1)?.line ?? 0) +
   (quickStartBlocks.at(-1)?.body.split("\n").length ?? 0);
-const firstBadge = readmeLines.findIndex((l) => l.includes("img.shields.io"));
+// A badge is a linked Markdown image: a line starting with "[![".
+const firstBadge = readmeLines.findIndex((l) =>
+  l.trimStart().startsWith("[!["),
+);
 if (firstBadge !== -1 && firstBadge < lastQuickStartLine)
   fail("README: move the badges below the last Quick start code block");
 if (readmeLines.slice(-4).join("\n") !== [...FOOTER, ""].join("\n")) {

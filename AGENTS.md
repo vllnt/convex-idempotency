@@ -117,6 +117,7 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
 | Error codes | `docs/API.md` → `## Error codes` table |
 | `peerDependencies.convex` version | `llms.txt` context line (`convex@^X.Y.Z`), `docs/API.md` Compatibility line, README Installation peer note |
 | Lifecycle / expiry asymmetry | `docs/API.md` begin/complete sections, Key design decisions above |
+| Shipped files (`package.json` `files`) | `scripts/test-package.mjs` required list; run `pnpm build && pnpm test:package` |
 | Any change | `pnpm generate:llms` to check the `llms.txt` links |
 
 Grep old values before committing (e.g. `git grep "1.36.1"` → must be empty).

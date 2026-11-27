@@ -32,8 +32,9 @@ export const beginResult = v.union(
 /**
  * Result of {@link complete}. `recorded: true` — the outcome was written.
  * `recorded: false` — the claim was lost; `reason` distinguishes a never-claimed
- * key (`missing`), a lease that expired before completion (`expired`), and a key
- * already marked done by a prior attempt (`already_done`). A host that sees
+ * key (`missing`), a lease that expired before completion (`expired`), a lease
+ * replaced by a newer claim (`superseded`), and a key already marked done by a
+ * prior attempt (`already_done`). A host that sees
  * `recorded: false` knows its work finished but the ledger row was gone.
  */
 export const completeResult = v.union(

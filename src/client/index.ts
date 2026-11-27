@@ -116,7 +116,7 @@ interface CompleteOptions {
  * @example
  * ```ts
  * const idem = new Idempotency(components.idempotency, {
- *   resultValidator: v.object({ chargeId: v.string() }).parse,
+ *   resultValidator: ChargeResult.parse, // e.g. a Zod schema, or a hand-written guard
  * });
  * const r = await idem.begin(ctx, requestId);
  * if (r.state === "done") return r.result;                  // typed replay
@@ -189,7 +189,7 @@ export class Idempotency<TResult = unknown> {
    * Mark `key` `done`, recording `result` and extending the done grace window.
    * Returns a discriminated outcome: `recorded: true` on success, or
    * `recorded: false` with a `reason` when the claim was lost (missing, expired,
-   * or already done) so the host can react to dropped work. `result` is validated
+   * superseded, or already done) so the host can react to dropped work. `result` is validated
    * against the host validator before it is stored.
    */
   complete(

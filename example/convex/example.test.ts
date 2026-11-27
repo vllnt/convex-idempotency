@@ -284,6 +284,16 @@ describe("idempotency — get projection", () => {
     expect(done?.status).toBe("done");
     expect(done?.result).toBe(7);
   });
+
+  test("get still returns an expired row until purge removes it", async () => {
+    const t = setup();
+    await t.mutation(api.example.begin, { key: "op_x", inflightTtlMs: 10 });
+    vi.setSystemTime(1_000);
+    const stale = await t.query(api.example.get, { key: "op_x" });
+    expect(stale).toMatchObject({ status: "inflight", expiresAt: 10 });
+    await t.mutation(api.example.purge, { batch: 200 });
+    expect(await t.query(api.example.get, { key: "op_x" })).toBeNull();
+  });
 });
 
 describe("idempotency — purge (bounded + self-rescheduling)", () => {

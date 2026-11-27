@@ -109,8 +109,8 @@ export const begin = mutation({
  * Mark `key` `done`, recording `result` and extending the grace window by
  * `doneTtlMs`. Returns a discriminated outcome so the host can detect a lost
  * claim: `recorded: false` with `missing` (key never existed), `expired` (the
- * inflight lease lapsed before completion), or `already_done` (a prior attempt
- * won). When `upsertOnMissing` is set, a `missing`/`expired` key is written as
+ * inflight lease lapsed before completion), `superseded` (a newer claim replaced
+ * this worker's lease), or `already_done` (a prior attempt won). When `upsertOnMissing` is set, a `missing`/`expired` key is written as
  * `done` anyway — for hosts that would rather record the finished work than drop
  * it. Time is server-sourced.
  *

@@ -104,11 +104,11 @@ fi
 
 is_denied_class() {
   local p="$1" base="${1##*/}"
+  # Test and type-test files: name.{test,spec}[-d].{ts,tsx,js,jsx,mjs,cjs,mts,cts}
+  if [[ "$base" =~ \.(test|spec)(-d)?\.(ts|tsx|js|jsx|mjs|cjs|mts|cts)$ ]]; then
+    return 0
+  fi
   case "$base" in
-    *.test.ts|*.test.tsx|*.test.js|*.test.mjs|*.test.cjs|*.test.mts|*.test.cts|*.test.jsx)
-      return 0 ;;
-    *.spec.ts|*.spec.tsx|*.spec.js|*.spec.mjs|*.spec.cjs|*.spec.jsx)
-      return 0 ;;
     .env|.env.*)
       return 0 ;;
   esac

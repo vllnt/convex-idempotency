@@ -119,7 +119,7 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
 | Error codes / messages | `docs/API.md` → `## Error codes` table and README `## Errors and fixes` (exact message; `test:package` checks both) |
 | `peerDependencies.convex` version | `llms.txt` context line (`convex@^X.Y.Z`), `docs/API.md` Compatibility line, README `## Compatibility` peer range |
 | Lifecycle / expiry asymmetry | `docs/API.md` begin/complete sections, Key design decisions above |
-| Shipped files (`package.json` `files`) | `scripts/test-package.mjs` required list; run `pnpm build && pnpm test:package` |
+| Shipped files (`package.json` `files`) or `exports` | `scripts/test-package.mjs` required list; `scripts/test-package-consumer.mjs` consumer (it must use every public export); run `pnpm build && pnpm test:package` |
 | README sections/examples, Links, footer, `llms.txt` Ecosystem, exports or error codes | Run `pnpm build && pnpm test:package`; it runs `scripts/check-docs.mjs` |
 | Any change | `pnpm generate:llms` to check the `llms.txt` links |
 

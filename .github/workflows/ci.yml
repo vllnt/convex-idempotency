@@ -76,6 +76,7 @@ jobs:
         with:
           node-version-file: .node-version
           cache: pnpm
+      - run: bash scripts/test-check-package-contents.sh
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm test:package

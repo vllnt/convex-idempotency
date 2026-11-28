@@ -1,4 +1,5 @@
 import { convexTest } from "convex-test";
+import { ConvexError } from "convex/values";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
@@ -9,6 +10,23 @@ import crons, {
 } from "../../src/component/crons";
 
 const modules = import.meta.glob("./**/*.ts");
+
+/** Asserts that `call` rejects with a `ConvexError` whose `data` is exactly `{ code, message }`. */
+async function expectConvexError(
+  call: Promise<unknown>,
+  code: string,
+  message: string,
+): Promise<void> {
+  const error: unknown = await call.then(
+    () => undefined,
+    (e: unknown) => e,
+  );
+  expect(error).toBeInstanceOf(ConvexError);
+  expect((error as ConvexError<{ code: string; message: string }>).data).toStrictEqual({
+    code,
+    message,
+  });
+}
 
 function setup() {
   const t = convexTest(schema, modules);
@@ -356,6 +374,9 @@ describe("idempotency — built-in prune cron", () => {
     const job = crons.crons["idempotency:prune"];
     expect(job?.name).toBe("mutations:purge");
     expect(job?.args).toEqual([{ batch: 200 }]);
+    // the registered schedule itself, not just the exported constant
+    expect(job?.schedule).toStrictEqual({ type: "interval", hours: 24 });
+    expect(Object.keys(crons.crons)).toStrictEqual(["idempotency:prune"]);
   });
 });
 
@@ -519,43 +540,58 @@ describe("idempotency — expired done key receiving complete() returns already_
 describe("idempotency — invalid TTL rejection (INVALID_TTL)", () => {
   test("inflightTtlMs:0 throws INVALID_TTL", async () => {
     const t = setup();
-    await expect(
+    await expectConvexError(
       t.mutation(api.example.begin, { key: "bad_ttl", inflightTtlMs: 0 }),
-    ).rejects.toThrow();
+      "INVALID_TTL",
+      "inflightTtlMs must be a positive finite number",
+    );
+    expect(await t.query(api.example.get, { key: "bad_ttl" })).toBeNull();
   });
 
   test("inflightTtlMs:-1 throws INVALID_TTL", async () => {
     const t = setup();
-    await expect(
+    await expectConvexError(
       t.mutation(api.example.begin, { key: "neg_ttl", inflightTtlMs: -1 }),
-    ).rejects.toThrow();
+      "INVALID_TTL",
+      "inflightTtlMs must be a positive finite number",
+    );
+    expect(await t.query(api.example.get, { key: "neg_ttl" })).toBeNull();
   });
 
   test("doneTtlMs:0 throws INVALID_TTL", async () => {
     const t = setup();
     await t.mutation(api.example.begin, { key: "bad_done_ttl" });
-    await expect(
+    await expectConvexError(
       t.mutation(api.example.complete, {
         key: "bad_done_ttl",
         doneTtlMs: 0,
       }),
-    ).rejects.toThrow();
+      "INVALID_TTL",
+      "doneTtlMs must be a positive finite number",
+    );
+    expect(
+      (await t.query(api.example.get, { key: "bad_done_ttl" }))?.status,
+    ).toBe("inflight");
   });
 });
 
 describe("idempotency — purge edge cases", () => {
   test.each([Number.NaN, 0, -1, 1.5, 501])("rejects invalid batch %s", async (batch) => {
     const t = setup();
-    await expect(t.mutation(api.example.purge, { batch })).rejects.toThrow(
-      /INVALID_BATCH|integer between/,
+    await expectConvexError(
+      t.mutation(api.example.purge, { batch }),
+      "INVALID_BATCH",
+      "batch must be an integer between 1 and 500",
     );
   });
 
   test("rejects a non-finite cutoff", async () => {
     const t = setup();
-    await expect(
+    await expectConvexError(
       t.mutation(api.example.purge, { before: Number.NaN }),
-    ).rejects.toThrow(/INVALID_BEFORE|finite/);
+      "INVALID_BEFORE",
+      "before must be finite",
+    );
   });
 
   test("purge on empty table returns 0", async () => {
@@ -591,34 +627,40 @@ describe("idempotency — purge edge cases", () => {
 });
 
 describe("idempotency — empty key and scope rejection", () => {
-  const code = (c: string) => expect.objectContaining({ data: expect.objectContaining({ code: c }) });
-
   test("begin rejects an empty key with INVALID_KEY", async () => {
     const t = setup();
-    await expect(t.mutation(api.example.begin, { key: "" })).rejects.toEqual(
-      code("INVALID_KEY"),
+    await expectConvexError(
+      t.mutation(api.example.begin, { key: "" }),
+      "INVALID_KEY",
+      "key must not be empty",
     );
   });
 
   test("begin rejects an empty scope with INVALID_SCOPE", async () => {
     const t = setup();
-    await expect(
+    await expectConvexError(
       t.mutation(api.example.begin, { key: "k", scope: "" }),
-    ).rejects.toEqual(code("INVALID_SCOPE"));
+      "INVALID_SCOPE",
+      "scope must not be empty",
+    );
   });
 
   test("complete rejects an empty key with INVALID_KEY and writes nothing", async () => {
     const t = setup();
-    await expect(
+    await expectConvexError(
       t.mutation(api.example.complete, { key: "", upsertOnMissing: true }),
-    ).rejects.toEqual(code("INVALID_KEY"));
+      "INVALID_KEY",
+      "key must not be empty",
+    );
     expect(await t.query(api.example.get, { key: "" })).toBeNull();
   });
 
   test("complete rejects an empty scope with INVALID_SCOPE", async () => {
     const t = setup();
-    await expect(
+    await expectConvexError(
       t.mutation(api.example.complete, { key: "k", scope: "" }),
-    ).rejects.toEqual(code("INVALID_SCOPE"));
+      "INVALID_SCOPE",
+      "scope must not be empty",
+    );
   });
 });

@@ -4,92 +4,69 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - 2026-11-27
+## [0.2.0] - 2026-11-28
+
+### Added
+
+- The npm package ships `docs/API.md`, `CHANGELOG.md` and `llms.txt`, so coding agents can read
+  docs that match the installed version under `node_modules/@vllnt/convex-idempotency/`. The
+  README is rewritten for coding agents (when to use, every export, errors and fixes, limits,
+  compatibility), and `docs/API.md` documents the entry points, client options, error codes and
+  the built-in `idempotency:prune` cron (every 24 h, `batch` 200).
+
+### Changed
+
+- `begin` and `complete` throw `ConvexError({ code: "INVALID_KEY" })` ("key must not be empty")
+  for an empty `key`. In 0.1.0 and its canaries, all calls with an empty key in the same scope
+  shared one row, so unrelated requests replayed each other's result. What to do: pass a
+  non-empty key, such as the request ID.
+- `begin` and `complete` throw `ConvexError({ code: "INVALID_SCOPE" })` ("scope must not be
+  empty") for an empty `scope`, including from a client built with `defaultScope: ""`. An empty
+  scope did not collide in 0.1.0 and its canaries. What to do: pass a non-empty `scope` and
+  `defaultScope`. Keys stored under the empty scope are not found under the new one, so a retry
+  within their old TTL can run the work again (they stay readable with `get` until `purge`
+  deletes them after they expire). `get` still accepts an empty key or scope.
+- `begin` (on `done`) and `get` leave the `result` key out when no result is stored, instead of
+  setting it to `undefined`. The value read is the same. What to do: check
+  `r.result !== undefined`, not `"result" in r`.
+- `engines.node` is `>=20` (was `>=18`), because the lowest `convex` peer, 1.45, needs Node 20
+  (1.49 and up need Node 22). What to do: run Node 20 or later.
+- `@vllnt/convex-idempotency/test` references the Vite types (`vite/client`) and needs
+  `convex-test`. What to do: install `vite` (Vitest brings it) and `convex-test` as dev
+  dependencies; current `convex-test` versions need `convex@^1.46.0`.
+- The `convex` peer range stays `^1.45.0`.
+- Releases publish only from `.github/workflows/publish.yml` with npm trusted publishing and
+  provenance: stable `@latest` from a `vX.Y.Z` tag on `main`, and a canary on every push to
+  `main` under the `canary` dist-tag only. The local `release`, `alpha` and `prepublishOnly`
+  scripts were removed.
+- The package description no longer says "exactly-once", `homepage` points to
+  `https://oss.vllnt.com/packages/convex-idempotency`, and there are more keywords.
+- Internal: pnpm 10 with a 7-day release-age gate, dev-dependency upgrades (`convex` 1.51,
+  `convex-test` 0.0.73, `vitest` 5, `eslint` 10, `@vllnt/typescript` 3), more tests, and CI checks
+  for docs, tarball contents, privacy and a packed-tarball consumer install; no runtime change.
 
 ### Fixed
 
-- `begin` and `complete` reject an empty `key` with `ConvexError({ code: "INVALID_KEY" })`. In
-  0.1.0 and its canaries, all calls with an empty key in the same scope shared one row, so
-  unrelated requests replayed each other's result.
+- An empty `key` no longer makes unrelated requests in one scope share a row; it is rejected (see
+  Changed).
 - The optional fields of the constructor options and of the `begin`, `complete` and `purge`
   options accept an explicit `undefined`. Hosts that turn on `exactOptionalPropertyTypes` can pass
   `v.optional(...)` arguments straight through instead of getting TS2379. Types only widen, so
   every call that compiled against 0.1.0 still compiles.
-- `register(t)` from `@vllnt/convex-idempotency/test` accepts a `convex-test` instance built
-  from the host app's own schema. It was typed for the component's schema only, so a host schema
-  with its own tables failed with TS2345. Types only; nothing changes at runtime.
-- `@vllnt/convex-idempotency/test` and the component sources now use explicit `.js` relative
-  imports and reference `vite/client`, so they type-check for consumers under both `bundler` and
-  `nodenext` module resolution.
+- `register(t)` from `@vllnt/convex-idempotency/test` is generic over the host schema, so it
+  accepts a `convex-test` instance built from the host app's own schema. It was typed for the
+  component's schema only, so a host schema with its own tables failed with TS2345. Types only.
+- `@vllnt/convex-idempotency/test` and the component sources use explicit `.js` relative imports,
+  so they type-check for consumers under both `bundler` and `nodenext` module resolution.
+- TSDoc no longer suggests a `convex/values` `.parse` for `resultValidator` (those validators have
+  none), and lists the `superseded` completion reason.
 
-### Documentation
+### Security
 
-- Document the error codes in `docs/API.md` and how to use `/test` in a consuming app.
-- The npm package now ships `docs/API.md`, `CHANGELOG.md` and `llms.txt`, so coding agents can
-  read docs that match the installed version under `node_modules/@vllnt/convex-idempotency/`.
-  `llms.txt` links the bundled files relatively and adds a "For coding agents" note and an
-  ecosystem link; the README adds the same note and a "Related packages" section.
-- `docs/API.md` lists the package entry points and notes that `get` returns an expired row until
-  it is purged or re-minted, and that a future `purge` `before` cutoff also deletes live keys.
-  TSDoc no longer suggests a `convex/values` `.parse` for `resultValidator` and lists the
-  `superseded` completion reason. The package description no longer says "exactly-once"; it is
-  now the README's first sentence, which matches the README's side-effect caveat.
-- The README is restructured for coding agents: a one-sentence summary, when to use it and when
-  not to, install and the first Quick start example in the first 40 lines, a table of every
-  public export, common tasks, every error code with its message and fix, limits, compatibility
-  and links. `llms.txt` gives the same summary, when to use, and links to the API reference and
-  the errors table. Every public export, including the `convex.config` default, has a TSDoc
-  summary, and `docs/API.md` gains a `## Client` section.
-- `pnpm test:package` (run in CI) also runs `scripts/check-docs.mjs`. It fails when a README
-  section is missing or out of order, a code block has no language tag, is tagged JavaScript or
-  has a `...` gap, a relative link or anchor does not resolve, an export has no README API table
-  row or lacks TSDoc, an error code or its exact message is undocumented, `llms.txt` does not name
-  the `convex` peer range, or the Links section, the footer or the `llms.txt` Ecosystem block
-  changed. It also type-checks every TypeScript example in README.md and docs/API.md against the
-  built package, resolved through its `exports` map.
-
-### Changed
-
-- Behavior change: `begin` and `complete` also reject an empty `scope` with
-  `ConvexError({ code: "INVALID_SCOPE" })`, including for a client built with
-  `defaultScope: ""`. An empty scope did not collide in 0.1.0 and its canaries. Migration:
-  callers that relied on an empty `scope` or `defaultScope: ""` must pass a non-empty scope; keys
-  stored under the empty scope are not found under the new one, so a retry within their old TTL
-  can run the work again (they stay readable with `get` until `purge` deletes them after they
-  expire). `get` still accepts an empty key or scope.
-- Releases run only from `.github/workflows/publish.yml` (npm trusted publishing with provenance,
-  stable `@latest` from a `vX.Y.Z` tag on `main`); local publish scripts were removed.
-- Move to pnpm 10 with a seven-day release-age gate, and add low-memory dev defaults.
-- The seven-day release-age gate (`minimumReleaseAge`, with `@vllnt/*` exempt) moves from the
-  `package.json` `pnpm` field, which pnpm 10 ignores, to a settings-only `pnpm-workspace.yaml`, so
-  every pnpm resolve enforces it: installs that change the lockfile, Renovate's lockfile updates
-  and the lockfile-free `scripts/test-package-consumer.mjs` install, which uses the same file and
-  pnpm version. Renovate also waits seven days before proposing an update (`@vllnt/*` exempt).
-- Canary builds publish on every push to `main` that changes the package or its shipped docs,
-  under the `canary` dist-tag only; the repository-variable gate was removed.
-- `pnpm test:package` (run in CI) fails when a required file is missing from the npm tarball, a
-  contributor file would ship, or an `llms.txt` link does not resolve inside it. Test files and
-  the privacy scan are checked by `scripts/check-package-contents.sh` before every publish.
-- `package.json` `homepage` points to `https://oss.vllnt.com/packages/convex-idempotency`, with
-  more keywords.
-- Development dependencies upgraded: `convex` 1.51, `convex-test` 0.0.73, `eslint` 10,
-  `@vllnt/typescript` 3 (stricter compiler checks, including `exactOptionalPropertyTypes`),
-  `vitest` 5.1.1, pnpm 10.34.9, and the `minimatch` override to 11.0.9. The `convex` peer range
-  stays `^1.45.0`.
-- `begin` (on `done`) and `get` leave the `result` key out when no result is stored, instead of
-  setting it to `undefined`. The value read is the same; only same-process checks such as
-  `"result" in r` or `toStrictEqual` see the difference.
-- Type tests (`*.test-d.ts`) now run with every `vitest run`, so CI type-checks the example app.
-- The publish workflow runs `pnpm test:package` in its quality gates, so a canary or stable
-  release no longer relies on PR CI for the tarball check.
-- `pnpm test:package` also installs the real `npm pack` tarball in a clean project
-  (`scripts/test-package-consumer.mjs`). It imports every runtime entry point with Node, runs
-  `register` from `/test` under Vitest, and type-checks a strict consumer that uses every public
-  export under `bundler` and `nodenext` module resolution with `skipLibCheck: false`. The CI
-  Build job and the publish quality gate both run it.
-- `scripts/check-package-contents.sh` rejects test files of every flavour (`.test.`, `.spec.`,
-  `.test-d.` and `.spec-d.` with `ts`, `tsx`, `js`, `jsx`, `mjs`, `cjs`, `mts` and `cts`). It
-  missed `.spec.mts`, `.spec.cts` and the type-test forms. CI now runs its test harness.
+- The 0.1.0 `purge` TSDoc said a caller cannot pass a future cutoff. That was wrong: an explicit
+  `before` is used as given, and a future value also deletes live keys, so their work can run
+  again. The TSDoc and docs now say so. Omit `before` or compute it on the server; never take it
+  from client input. No runtime change.
 
 ## [0.1.0] - 2026-09-01
 

@@ -85,7 +85,7 @@ export const begin = mutation({
       await ctx.db.patch("keys", existing._id, {
         status: "inflight",
         claimId,
-        // v8 ignore next -- migration fallback for rows written before claim generations existed
+        // A row written before claim generations existed counts as generation 1.
         claimGeneration: (existing.claimGeneration ?? 1) + 1,
         result: undefined,
         expiresAt,

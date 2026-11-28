@@ -1,0 +1,5 @@
+# Settings only (no packages list). pnpm 10 reads the release-age gate from this
+# file and ignores it in the package.json "pnpm" field.
+minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  - "@vllnt/*"

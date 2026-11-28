@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import {
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -280,13 +281,20 @@ try {
     name: "consumer",
     private: true,
     type: "module",
+    // Same pnpm version, overrides and ignored builds as this repo.
+    packageManager: manifest.packageManager,
+    pnpm: manifest.pnpm,
     dependencies: {
       [PACKAGE]: `file:${tarball}`,
       ...Object.fromEntries(PEERS.map((name) => [name, lockedVersion(name)])),
     },
-    // Same release-age gate and overrides as this repo.
-    pnpm: manifest.pnpm,
   });
+  // Same release-age gate as this repo: pnpm 10 reads it only from
+  // pnpm-workspace.yaml (settings only), and this install has no lockfile.
+  copyFileSync(
+    join(ROOT, "pnpm-workspace.yaml"),
+    join(app, "pnpm-workspace.yaml"),
+  );
   run(
     "pnpm install of the packed tarball failed",
     "pnpm",

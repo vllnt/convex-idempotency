@@ -1,7 +1,8 @@
 # API Reference — @vllnt/convex-idempotency
 
-**Compatibility:** `convex@^1.45.0`. Error codes are listed at the end of this
-page.
+**Compatibility:** `convex@^1.45.0`, Node.js 20 or later. `/test` also needs
+`convex-test` (whose current versions need `convex@^1.46.0`) and Vite. Error
+codes are listed at the end of this page.
 
 ## Entry points
 
@@ -11,6 +12,10 @@ page.
 | `@vllnt/convex-idempotency/convex.config`        | The component definition to mount with `app.use(...)` (named `idempotency`)                                                                    |
 | `@vllnt/convex-idempotency/test`                 | `register` function: `register(t, name = "idempotency")` mounts the component in a `convex-test` instance built from the host app's own schema |
 | `@vllnt/convex-idempotency/_generated/component` | Type-only `ComponentApi` of the mounted component                                                                                              |
+
+`/convex.config.js` and `/_generated/component.js` are aliases of the same two
+entry points, and `@vllnt/convex-idempotency/package.json` exports the manifest
+for tools that read it.
 
 Mount it in `convex/convex.config.ts`:
 
@@ -120,8 +125,8 @@ is still the host/provider's responsibility.
 `ConvexError({ code: "INVALID_KEY" })` / `INVALID_SCOPE` before any write.
 
 **`inflightTtlMs` must be a positive finite number.** Passing `0`, a negative
-value, or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`. A zero or
-negative TTL would produce `expiresAt ≤ now`, immediately expiring the claim.
+value, `NaN` or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`. A zero
+or negative TTL would produce `expiresAt ≤ now`, immediately expiring the claim.
 
 ### `complete(ctx, key, result?, opts?) → CompleteResult`
 
@@ -158,7 +163,7 @@ check them: it looks up the `(scope, key)` pair as given. 0.1.0 and its canaries
 such a row until `purge` deletes it; otherwise it returns `null`.
 
 **`doneTtlMs` must be a positive finite number.** Passing `0`, a negative value,
-or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
+`NaN` or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
 
 ### `purge(ctx, opts?) → number`
 
@@ -173,9 +178,10 @@ removes nothing new.
 
 **`before` is trusted as given.** A future `before` also deletes live keys
 (inflight and done), which lets the work run again. Omit it, or compute it on
-the server; never pass a value from client input. A built-in daily cron
-(`crons.ts`) drives this automatically; call `purge` directly only for an extra
-or custom-cadence sweep.
+the server; never pass a value from client input. A built-in cron,
+`idempotency:prune` (`crons.ts`), runs `purge` every 24 h with `batch` 200 and
+the default cutoff; call `purge` directly only for an extra or custom-cadence
+sweep.
 
 ## Queries
 

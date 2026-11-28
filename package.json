@@ -1,6 +1,6 @@
 {
   "name": "@vllnt/convex-idempotency",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Convex component that records idempotency keys so a retried mutation, webhook or job replays its stored result instead of running twice.",
   "license": "MIT",
   "type": "module",
@@ -99,7 +99,7 @@
     "url": "https://github.com/vllnt/convex-idempotency"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "publishConfig": {
     "access": "public"

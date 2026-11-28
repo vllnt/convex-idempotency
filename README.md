@@ -194,7 +194,8 @@ Invalid arguments throw a `ConvexError` whose `data.code` is one of these:
 ## Limits and gotchas
 
 - Defaults: inflight lease `60_000` ms, done grace `86_400_000` ms (24 h),
-  scope `"global"`, purge batch `200` (max `500`), purge cron every 24 h.
+  scope `"global"`, purge batch `200` (max `500`). The built-in cron
+  `idempotency:prune` runs `purge` every 24 h with `batch` 200.
 - Not exactly-once for external side effects: a worker can finish the external
   call and crash before `complete`. Use the provider's idempotency key too.
 - An expired key is claimed `fresh` again by the next `begin`, even if it was
@@ -216,15 +217,18 @@ Invalid arguments throw a `ConvexError` whose `data.code` is one of these:
 ## Compatibility
 
 - Peer dependency: `convex@^1.45.0`. CI builds and tests against the locked
-  dev version, `convex` 1.51.0.
-- Runtime: the client and the component run inside Convex functions. The
-  `convex` package's `engines` field asks for Node 20 or later (1.45 to 1.48)
-  or Node 22 or later (1.49 and up).
+  dev version, `convex` 1.51.0. The lowest peer, 1.45.0, is not in CI; it was
+  checked once by hand with a consumer app (deploy, quick start, type-check).
+- Node.js: 20 or later (`engines.node` is `>=20`). `convex` 1.45 to 1.48 need
+  Node 20 or later, and 1.49 and up need Node 22 or later. The client and the
+  component run inside Convex functions.
 - TypeScript: built with `strict` and `exactOptionalPropertyTypes`. Relative
   imports end in `.js`, so a consumer can type-check it under `bundler` or
   `nodenext` module resolution.
-- `@vllnt/convex-idempotency/test` needs `convex-test` and Vitest (Vite's
-  `import.meta.glob`) in your app.
+- `@vllnt/convex-idempotency/test` needs `convex-test` and Vite in your app:
+  it calls `import.meta.glob` and references the `vite/client` types (Vitest
+  brings Vite). Current `convex-test` versions, such as 0.0.73, need
+  `convex@^1.46.0`.
 - No React entry point: this package is backend only.
 
 ## Testing

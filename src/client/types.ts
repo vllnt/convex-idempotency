@@ -41,7 +41,11 @@ export type CompleteResult =
       recorded: true;
     }
   | {
-      /** The claim was lost; the work ran but its ledger row was gone. */
+      /**
+       * The claim was lost: the work ran but its result was not recorded. The row
+       * may be gone (`missing`), lapsed (`expired`), re-claimed (`superseded`), or
+       * already hold another attempt's result (`already_done`).
+       */
       recorded: false;
       /**
        * `missing` — no key for this id/scope. `expired` — the inflight lease

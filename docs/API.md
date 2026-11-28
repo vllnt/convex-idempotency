@@ -5,16 +5,17 @@ page.
 
 ## Entry points
 
-| Import                                           | Provides                                                                                                                             |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `@vllnt/convex-idempotency`                      | `Idempotency` class; types `IdempotencyComponent`, `IdempotencyOptions`, `BeginResult`, `CompleteResult`, `KeyState`, `ResultParser` |
-| `@vllnt/convex-idempotency/convex.config`        | The component definition to mount with `app.use(...)` (named `idempotency`)                                                          |
-| `@vllnt/convex-idempotency/test`                 | `register(t, name = "idempotency")` to mount the component in a `convex-test` instance built from the host app's own schema          |
-| `@vllnt/convex-idempotency/_generated/component` | Type-only `ComponentApi` of the mounted component                                                                                    |
+| Import                                           | Provides                                                                                                                                       |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@vllnt/convex-idempotency`                      | `Idempotency` class; types `IdempotencyComponent`, `IdempotencyOptions`, `BeginResult`, `CompleteResult`, `KeyState`, `ResultParser`           |
+| `@vllnt/convex-idempotency/convex.config`        | The component definition to mount with `app.use(...)` (named `idempotency`)                                                                    |
+| `@vllnt/convex-idempotency/test`                 | `register` function: `register(t, name = "idempotency")` mounts the component in a `convex-test` instance built from the host app's own schema |
+| `@vllnt/convex-idempotency/_generated/component` | Type-only `ComponentApi` of the mounted component                                                                                              |
 
 Mount it in `convex/convex.config.ts`:
 
 ```ts
+// convex/convex.config.ts
 import { defineApp } from "convex/server";
 import idempotency from "@vllnt/convex-idempotency/convex.config";
 
@@ -23,13 +24,31 @@ app.use(idempotency);
 export default app;
 ```
 
+## Client
+
+`new Idempotency<TResult = unknown>(component, options?)`
+
+- `component`: `components.idempotency` from your app's `convex/_generated/api`
+  (type `IdempotencyComponent`, the function references the client calls).
+- `options`: `IdempotencyOptions<TResult>`, all optional:
+
+| Option                 | Type                    | Default      | Effect                                                                                 |
+| ---------------------- | ----------------------- | ------------ | -------------------------------------------------------------------------------------- |
+| `defaultScope`         | `string`                | `"global"`   | Scope used when a call omits `scope`. Must not be `""` (`begin`/`complete` throw)      |
+| `defaultInflightTtlMs` | `number`                | `60_000`     | Inflight lease (ms) used when `begin` omits `inflightTtlMs`                            |
+| `defaultDoneTtlMs`     | `number`                | `86_400_000` | Done grace (ms) used when `complete` omits `doneTtlMs`                                 |
+| `upsertOnMissing`      | `boolean`               | `false`      | `complete` records a `missing` or `expired` key as `done` instead of `recorded: false` |
+| `resultValidator`      | `ResultParser<TResult>` | none         | `(value: unknown) => TResult`; runs on `begin`, `get` and `complete` results           |
+
 Construct the client with the mounted component and optional config:
 
 ```ts
+// convex/idempotency.ts
 import { Idempotency } from "@vllnt/convex-idempotency";
+import { components } from "./_generated/api";
 
 type MyResult = { id: string };
-const idem = new Idempotency<MyResult>(components.idempotency, {
+export const idem = new Idempotency<MyResult>(components.idempotency, {
   defaultScope: "global", // namespace applied when a call omits `scope`
   defaultInflightTtlMs: 60_000, // inflight lease (ms) when `begin` omits `inflightTtlMs` (60s)
   defaultDoneTtlMs: 86_400_000, // done grace (ms) when `complete` omits `doneTtlMs` (24h)
@@ -53,10 +72,11 @@ All methods take the host `ctx` as the first argument: `begin`, `complete` and
 `purge` need a mutation or action context (`runMutation`); `get` works with any
 context that has `runQuery`.
 
-**Time is server-sourced.** Every handler reads `Date.now()` itself; `begin`,
-`complete` and `get` accept no caller-supplied `now`, so a skewed or hostile
-client clock cannot make a key look live or expired. The one time input is
-`purge`'s optional `before` cutoff (see below).
+**Time is server-sourced.** The component's mutations (`begin`, `complete`,
+`purge`) read the server clock (`Date.now()`) themselves, and no function takes
+a caller-supplied `now`, so a skewed or hostile client clock cannot make a key
+look live or expired. `get` reads no clock: it returns the stored `expiresAt`.
+The one time input is `purge`'s optional `before` cutoff (see below).
 
 **Result validation.** When `resultValidator` is set it runs at the client
 boundary: over the value written by `complete` (before storage) and over the
@@ -132,7 +152,10 @@ the grace window has lapsed. The `expired` reason applies only to inflight keys
 whose lease lapsed before completion.
 
 **`key` and `scope` must not be empty** (same errors as `begin`). `get` does not
-reject them: an empty key simply finds nothing.
+check them: it looks up the `(scope, key)` pair as given. 0.1.0 and its canaries
+(the guard first shipped in `0.1.1-canary.1d25c30`) let `begin` and `complete`
+(with `upsertOnMissing`) store an empty key or scope, so `get` can still return
+such a row until `purge` deletes it; otherwise it returns `null`.
 
 **`doneTtlMs` must be a positive finite number.** Passing `0`, a negative value,
 or `Infinity` throws `ConvexError({ code: "INVALID_TTL" })`.
@@ -171,13 +194,14 @@ you need to know whether it is still live.
 
 Invalid arguments throw a `ConvexError` whose `data.code` is one of:
 
-| Code             | Thrown by           | Cause                                                              |
-| ---------------- | ------------------- | ------------------------------------------------------------------ |
-| `INVALID_KEY`    | `begin`, `complete` | `key` is the empty string                                          |
-| `INVALID_SCOPE`  | `begin`, `complete` | `scope` is the empty string                                        |
-| `INVALID_TTL`    | `begin`, `complete` | `inflightTtlMs` / `doneTtlMs` is zero, negative, `NaN` or infinite |
-| `INVALID_BATCH`  | `purge`             | `batch` is not an integer between 1 and 500                        |
-| `INVALID_BEFORE` | `purge`             | `before` is not finite                                             |
+| Code             | Message                                          | Thrown by           | Cause                                                |
+| ---------------- | ------------------------------------------------ | ------------------- | ---------------------------------------------------- |
+| `INVALID_KEY`    | `key must not be empty`                          | `begin`, `complete` | `key` is the empty string                            |
+| `INVALID_SCOPE`  | `scope must not be empty`                        | `begin`, `complete` | `scope` is the empty string                          |
+| `INVALID_TTL`    | `inflightTtlMs must be a positive finite number` | `begin`             | `inflightTtlMs` is zero, negative, `NaN` or infinite |
+| `INVALID_TTL`    | `doneTtlMs must be a positive finite number`     | `complete`          | `doneTtlMs` is zero, negative, `NaN` or infinite     |
+| `INVALID_BATCH`  | `batch must be an integer between 1 and 500`     | `purge`             | `batch` is not an integer between 1 and 500          |
+| `INVALID_BEFORE` | `before must be finite`                          | `purge`             | `before` is not finite                               |
 
 Auth and ownership are the host's job: a component cannot read `ctx.auth`, so
 authorize the caller and derive `key`/`scope` before calling the client.

@@ -9,8 +9,8 @@ All notable changes to this project are documented here. The format is based on
 ### Fixed
 
 - `begin` and `complete` reject an empty `key` with `ConvexError({ code: "INVALID_KEY" })`. In
-  0.1.0 all calls with an empty key in the same scope shared one row, so unrelated requests
-  replayed each other's result.
+  0.1.0 and its canaries, all calls with an empty key in the same scope shared one row, so
+  unrelated requests replayed each other's result.
 - The optional fields of the constructor options and of the `begin`, `complete` and `purge`
   options accept an explicit `undefined`. Hosts that turn on `exactOptionalPropertyTypes` can pass
   `v.optional(...)` arguments straight through instead of getting TS2379. Types only widen, so
@@ -32,15 +32,31 @@ All notable changes to this project are documented here. The format is based on
 - `docs/API.md` lists the package entry points and notes that `get` returns an expired row until
   it is purged or re-minted, and that a future `purge` `before` cutoff also deletes live keys.
   TSDoc no longer suggests a `convex/values` `.parse` for `resultValidator` and lists the
-  `superseded` completion reason. The package description says "lease-based" instead of
-  "exactly-once", matching the README's side-effect caveat.
+  `superseded` completion reason. The package description no longer says "exactly-once"; it is
+  now the README's first sentence, which matches the README's side-effect caveat.
+- The README is restructured for coding agents: a one-sentence summary, when to use it and when
+  not to, install and the first Quick start example in the first 40 lines, a table of every
+  public export, common tasks, every error code with its message and fix, limits, compatibility
+  and links. `llms.txt` gives the same summary, when to use, and links to the API reference and
+  the errors table. Every public export, including the `convex.config` default, has a TSDoc
+  summary, and `docs/API.md` gains a `## Client` section.
+- `pnpm test:package` (run in CI) also runs `scripts/check-docs.mjs`. It fails when a README
+  section is missing or out of order, a code block has no language tag, is tagged JavaScript or
+  has a `...` gap, a relative link or anchor does not resolve, an export has no README API table
+  row or lacks TSDoc, an error code or its exact message is undocumented, `llms.txt` does not name
+  the `convex` peer range, or the Links section, the footer or the `llms.txt` Ecosystem block
+  changed. It also type-checks every TypeScript example in README.md and docs/API.md against the
+  built package, resolved through its `exports` map.
 
 ### Changed
 
 - Behavior change: `begin` and `complete` also reject an empty `scope` with
   `ConvexError({ code: "INVALID_SCOPE" })`, including for a client built with
-  `defaultScope: ""`. An empty scope did not collide in 0.1.0, so a host that used one must pass
-  a non-empty scope. `get` still accepts an empty key or scope.
+  `defaultScope: ""`. An empty scope did not collide in 0.1.0 and its canaries. Migration:
+  callers that relied on an empty `scope` or `defaultScope: ""` must pass a non-empty scope; keys
+  stored under the empty scope are not found under the new one, so a retry within their old TTL
+  can run the work again (they stay readable with `get` until `purge` deletes them after they
+  expire). `get` still accepts an empty key or scope.
 - Releases run only from `.github/workflows/publish.yml` (npm trusted publishing with provenance,
   stable `@latest` from a `vX.Y.Z` tag on `main`); local publish scripts were removed.
 - Move to pnpm 10 with a seven-day release-age gate, and add low-memory dev defaults.

@@ -1,9 +1,16 @@
 # @vllnt/convex-idempotency
 
-> Lease-based idempotency key ledger for retried operations, as a Convex component
+> Convex component that records idempotency keys so a retried mutation, webhook or job replays its stored result instead of running twice.
 
-`@vllnt/convex-idempotency` is a publishable Convex component. It targets `convex@^1.45.0`.
-It stores one sandboxed table - `keys` (unique per `(scope, key)`, holding a `status` of `inflight` or `done`, an opaque host `result`, and an `expiresAt` deadline). `begin` mints an inflight claim under a short server-timed lease (`inflightTtlMs`, default 60s) or replays a prior `done` outcome; `complete` returns a discriminated `recorded` outcome and extends a longer done grace window (`doneTtlMs`, default 24h); expired keys are re-minted in place; a bounded, self-rescheduling `purge` (and a built-in daily cron) sweeps them. Time is read from the server clock inside every handler - no caller-supplied `now` - so a hostile clock cannot force a key to look live or expired; the only time input is `purge`'s optional `before` cutoff, which must not come from client input. The ledger does not guarantee exactly-once external side effects: use the provider's idempotency key too. Dedup rides the Convex mutation transaction. The host owns the operation, auth, and the result type (the client is generic over it, with an optional `resultValidator` narrowing the opaque stored value at the boundary); the component owns only the dedup ledger.
+`@vllnt/convex-idempotency` is a Convex component (`convex@^1.45.0`). It stores one sandboxed table, `keys`, unique per `(scope, key)`, holding a `status` (`inflight` or `done`), an opaque host `result` and an `expiresAt` deadline. `begin` claims a key under a short server-timed lease (`inflightTtlMs`, default 60 s) or replays a prior `done` result; `complete` records the result, returns `{ recorded: true }` or `{ recorded: false, reason }`, and keeps the key for a done grace window (`doneTtlMs`, default 24 h). Expired keys are claimed again in place. A bounded, self-rescheduling `purge` and a built-in daily cron delete expired keys. The mutations (`begin`, `complete`, `purge`) read the server clock and `get` returns the stored `expiresAt`; the only time input is `purge`'s optional `before` cutoff, which must not come from client input. The host owns the operation, auth and the result type (the client is generic over it, with an optional `resultValidator`); the component owns only the ledger.
+
+## When to use
+
+- Use it when a Convex mutation can be retried and must not apply its writes twice.
+- Use it when a webhook, queue consumer or form submit arrives more than once with the same ID, and the repeat should return the first result.
+- Use it when you need one live claim per key, with a lease that frees itself if the worker crashes.
+- Do not use it for exactly-once external side effects (a charge, an email): use the provider's own idempotency key; this ledger only dedups Convex work.
+- Do not use it to dedup email, metered usage or balances: `@vllnt/convex-email`, `@vllnt/convex-metering` and `@vllnt/convex-wallet` dedup those themselves.
 
 ## For coding agents
 
@@ -11,14 +18,12 @@ The docs are bundled in the npm package: `node_modules/@vllnt/convex-idempotency
 
 ## Docs
 
-- [README](./README.md): Project overview, installation, usage examples, API summary
+- [README](./README.md): Install, quick start, API table, common tasks, errors, limits, compatibility
 - [API Reference](./docs/API.md): Public class methods, return shapes, input validation
+- [Error codes](./docs/API.md#error-codes): Every `ConvexError` code, its message, which function throws it and its cause
+- [Errors and fixes](./README.md#errors-and-fixes): The same codes and messages, with the fix for each
 - [Changelog](./CHANGELOG.md): Version history and release notes
 - [License](./LICENSE): MIT license
-
-## Ecosystem
-
-- [vllnt oss](https://oss.vllnt.com/llms.txt): Index of the vllnt open-source packages
 
 ## Optional
 
@@ -30,3 +35,12 @@ Repository only, not in the npm package:
 - [AGENTS](https://github.com/vllnt/convex-idempotency/blob/main/AGENTS.md): Contributor instructions for this repository
 - [Security Policy](https://github.com/vllnt/convex-idempotency/blob/main/SECURITY.md): Vulnerability reporting policy
 - [Code of Conduct](https://github.com/vllnt/convex-idempotency/blob/main/CODE_OF_CONDUCT.md): Community participation guidelines
+
+## Ecosystem
+
+- [Package page](https://oss.vllnt.com/packages/convex-idempotency)
+- [Release feed](https://oss.vllnt.com/packages/convex-idempotency/rss.xml)
+- [All @vllnt packages](https://oss.vllnt.com/llms.txt)
+- [Search vllnt packages and docs](https://index.vllnt.com)
+- [vllnt](https://vllnt.com/llms.txt)
+- [Author](https://bntvllnt.com)

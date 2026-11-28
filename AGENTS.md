@@ -45,7 +45,7 @@ the host narrows it via a `resultValidator` at the client boundary.
 **Component owns:**
 
 - The dedup ledger (`keys` table) — mint, expire, purge
-- Server-sourced time — `Date.now()` inside every handler; no caller-supplied `now` (the only
+- Server-sourced time — `Date.now()` inside every mutation (`get` reads no clock); no caller-supplied `now` (the only
   time input is `purge`'s optional `before` cutoff)
 - TTL validation — `inflightTtlMs` / `doneTtlMs` must be positive finite numbers
 - Lifecycle: `absent → inflight → done → expired → re-minted`
@@ -74,7 +74,7 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
   never overwrite a prior winner's recorded outcome — the `expired` reason is reserved for inflight
   keys whose lease lapsed before completion.
 
-- **Server-sourced time:** every handler calls `Date.now()` internally; no API surface accepts a
+- **Server-sourced time:** every mutation calls `Date.now()` internally (`get` reads no clock); no API surface accepts a
   caller-supplied `now` (`purge`'s optional `before` cutoff is the one time input, trusted as
   given; a future value deletes live keys). A hostile or skewed client clock cannot force a key to
   look live (hijack a replay) or expired (bypass dedup).
@@ -116,7 +116,7 @@ passes an opaque `key`. `scope` provides namespacing per tenant/operation-type; 
 | Public API (begin/complete/get/purge signatures) | README `## API` table, `docs/API.md`, `llms.txt` context |
 | Config options / defaults | README `## API` table (`IdempotencyOptions` row) and `## Limits and gotchas` defaults, `docs/API.md` `## Client` section |
 | Schema / table / indexes | `docs/API.md`, `llms.txt` context, Architecture above |
-| Error codes | `docs/API.md` → `## Error codes` table |
+| Error codes / messages | `docs/API.md` → `## Error codes` table and README `## Errors and fixes` (exact message; `test:package` checks both) |
 | `peerDependencies.convex` version | `llms.txt` context line (`convex@^X.Y.Z`), `docs/API.md` Compatibility line, README `## Compatibility` peer range |
 | Lifecycle / expiry asymmetry | `docs/API.md` begin/complete sections, Key design decisions above |
 | Shipped files (`package.json` `files`) | `scripts/test-package.mjs` required list; run `pnpm build && pnpm test:package` |

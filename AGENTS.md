@@ -9,11 +9,12 @@ Convex agent skills for common tasks can be installed by running `npx convex ai-
 <!-- convex-ai-end -->
 
 `example/convex/_generated/ai/guidelines.md` is generated and git-ignored, so a fresh clone lacks
-it. If it is missing, run `pnpm exec convex ai-files install` from the repository root (no Convex
-login or deployment needed; `convex.json` sets `aiFiles.skills.agents` to `[]`, so it installs no
-agent skills). It also rewrites the block above and creates `CLAUDE.md`: run `git restore
-AGENTS.md` and delete `CLAUDE.md` (`pnpm lint` fails while it exists), and commit neither. If the
-command cannot run, follow https://docs.convex.dev/ and the conventions below.
+it. If it is missing, run `pnpm exec convex ai-files install` from the repository root before you
+edit AGENTS.md (it needs network access to version.convex.dev, but no Convex login or deployment;
+`convex.json` sets `aiFiles.skills.agents` to `[]`, so it installs no agent skills). Whether or not
+it succeeds, it rewrites the block above and creates `CLAUDE.md`: then run `git restore AGENTS.md`
+and delete `CLAUDE.md` (`pnpm lint` fails while it exists), and commit neither. If it cannot run,
+follow https://docs.convex.dev/ and the conventions below.
 
 # @vllnt/convex-idempotency
 
@@ -137,3 +138,5 @@ Grep old values before committing (e.g. `git grep "1.36.1"` → must be empty).
 - Every `**/_generated/**` file is owned exclusively by Convex CLI codegen.
 - Never create, edit, lint, or format generated files manually.
 - Run `pnpm codegen` to regenerate them and commit the generated output unchanged.
+- Exception: `example/convex/_generated/ai/` is written by `pnpm exec convex ai-files install`
+  (see the top of this file), not by `pnpm codegen`, and is git-ignored, so never commit it.

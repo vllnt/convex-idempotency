@@ -18,8 +18,9 @@ All notable changes to this project are documented here. The format is based on
 
 - `begin` and `complete` throw `ConvexError({ code: "INVALID_KEY" })` ("key must not be empty")
   for an empty `key`. In 0.1.0 and its canaries, all calls with an empty key in the same scope
-  shared one row, so unrelated requests replayed each other's result. What to do: pass a
-  non-empty key, such as the request ID.
+  shared one row, so unrelated requests replayed each other's result. The key and scope are
+  checked before the TTL, so a call with both an empty key and a bad TTL now throws `INVALID_KEY`.
+  What to do: pass a non-empty key, such as the request ID.
 - `begin` and `complete` throw `ConvexError({ code: "INVALID_SCOPE" })` ("scope must not be
   empty") for an empty `scope`, including from a client built with `defaultScope: ""`. An empty
   scope did not collide in 0.1.0 and its canaries. What to do: pass a non-empty `scope` and
@@ -30,20 +31,19 @@ All notable changes to this project are documented here. The format is based on
   setting it to `undefined`. The value read is the same. What to do: check
   `r.result !== undefined`, not `"result" in r`.
 - `engines.node` is `>=20` (was `>=18`), because the lowest `convex` peer, 1.45, needs Node 20
-  (1.49 and up need Node 22). What to do: run Node 20 or later.
-- `@vllnt/convex-idempotency/test` references the Vite types (`vite/client`) and needs
-  `convex-test`. What to do: install `vite` (Vitest brings it) and `convex-test` as dev
-  dependencies; current `convex-test` versions need `convex@^1.46.0`.
-- The `convex` peer range stays `^1.45.0`.
+  (1.49 and up need Node 22). What to do: run Node 20 or later. The `convex` peer range is
+  unchanged (`^1.45.0`).
+- `@vllnt/convex-idempotency/test` now references the Vite types (`vite/client`). What to do:
+  install `vite` (Vitest brings it) as a dev dependency next to `convex-test`; current
+  `convex-test` versions need `convex@^1.46.0`.
 - Releases publish only from `.github/workflows/publish.yml` with npm trusted publishing and
-  provenance: stable `@latest` from a `vX.Y.Z` tag on `main`, and a canary on every push to
-  `main` under the `canary` dist-tag only. The local `release`, `alpha` and `prepublishOnly`
+  provenance: stable `@latest` from a `vX.Y.Z` tag on `main`, and a canary under the `canary`
+  dist-tag on pushes to `main` that change the package or its shipped docs. The local `release`, `alpha` and `prepublishOnly`
   scripts were removed.
 - The package description no longer says "exactly-once", `homepage` points to
   `https://oss.vllnt.com/packages/convex-idempotency`, and there are more keywords.
-- Internal: pnpm 10 with a 7-day release-age gate, dev-dependency upgrades (`convex` 1.51,
-  `convex-test` 0.0.73, `vitest` 5, `eslint` 10, `@vllnt/typescript` 3), more tests, and CI checks
-  for docs, tarball contents, privacy and a packed-tarball consumer install; no runtime change.
+- Internal: pnpm 10, dev-dependency upgrades, more tests and new CI package checks; no runtime
+  change.
 
 ### Fixed
 
@@ -60,6 +60,8 @@ All notable changes to this project are documented here. The format is based on
   so they type-check for consumers under both `bundler` and `nodenext` module resolution.
 - TSDoc no longer suggests a `convex/values` `.parse` for `resultValidator` (those validators have
   none), and lists the `superseded` completion reason.
+- CHANGELOG: the 0.1.0 entry has its real release date (2026-09-01) and lists the claim-ID fencing
+  and purge-input checks that shipped in it; they were left under Unreleased.
 
 ### Security
 

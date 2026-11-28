@@ -254,6 +254,9 @@ describe("expiry boundaries (expiresAt == now)", () => {
     });
     expect(second.state).toBe("fresh");
     expect(second).not.toStrictEqual(first);
+    expect(
+      (await t.query(api.example.get, { key: "edge_begin" }))?.expiresAt,
+    ).toBe(20);
   });
 
   test("complete returns expired when expiresAt equals now", async () => {
@@ -332,7 +335,7 @@ describe("purge details", () => {
   test("re-scheduled passes keep the first pass's cutoff", async () => {
     const t = setup();
     for (const key of ["x1", "x2", "x3"]) {
-      await t.mutation(api.example.begin, { key, inflightTtlMs: 10 }); // expires by 12
+      await t.mutation(api.example.begin, { key, inflightTtlMs: 10 }); // short lease, expired long before 1_000
     }
     vi.setSystemTime(100);
     await t.mutation(api.example.begin, { key: "later", inflightTtlMs: 1_400 }); // expiresAt 1_500

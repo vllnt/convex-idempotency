@@ -217,8 +217,8 @@ Invalid arguments throw a `ConvexError` whose `data.code` is one of these:
 ## Compatibility
 
 - Peer dependency: `convex@^1.45.0`. CI builds and tests against the locked
-  dev version, `convex` 1.51.0; the lowest peer, 1.45.0, was checked by one
-  manual run, not in CI.
+  dev version, `convex` 1.51.0. The lowest peer, 1.45.0, is not in CI; it was
+  checked once by hand with a consumer app (deploy, quick start, type-check).
 - Node.js: 20 or later (`engines.node` is `>=20`). `convex` 1.45 to 1.48 need
   Node 20 or later, and 1.49 and up need Node 22 or later. The client and the
   component run inside Convex functions.

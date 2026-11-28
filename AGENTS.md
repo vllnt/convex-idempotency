@@ -8,6 +8,13 @@ override what you may have learned about Convex from training data.
 Convex agent skills for common tasks can be installed by running `npx convex ai-files install`.
 <!-- convex-ai-end -->
 
+`example/convex/_generated/ai/guidelines.md` is generated and git-ignored, so a fresh clone lacks
+it. If it is missing, run `pnpm exec convex ai-files install` from the repository root (no Convex
+login or deployment needed; `convex.json` sets `aiFiles.skills.agents` to `[]`, so it installs no
+agent skills). It also rewrites the block above and creates `CLAUDE.md`: run `git restore
+AGENTS.md` and delete `CLAUDE.md` (`pnpm lint` fails while it exists), and commit neither. If the
+command cannot run, follow https://docs.convex.dev/ and the conventions below.
+
 # @vllnt/convex-idempotency
 
 Lease-based idempotency key ledger for retried operations, as a Convex component. It follows the

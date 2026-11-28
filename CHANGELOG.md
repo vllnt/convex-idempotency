@@ -62,8 +62,8 @@ All notable changes to this project are documented here. The format is based on
 - TSDoc no longer suggests a `convex/values` `.parse` for `resultValidator` (those validators have
   none), and lists the `superseded` completion reason.
 - CHANGELOG: the 0.1.0 entry has its real release date (2026-09-01) and lists the claim-ID fencing,
-  purge-input checks and `convex@^1.45.0` requirement that shipped in it; they were left under
-  Unreleased.
+  purge-input checks, `convex@^1.45.0` requirement and codegen script that shipped in it; they were
+  left under Unreleased.
 
 ### Security
 

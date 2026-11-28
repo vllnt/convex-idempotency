@@ -60,6 +60,10 @@ All notable changes to this project are documented here. The format is based on
 - Releases run only from `.github/workflows/publish.yml` (npm trusted publishing with provenance,
   stable `@latest` from a `vX.Y.Z` tag on `main`); local publish scripts were removed.
 - Move to pnpm 10 with a seven-day release-age gate, and add low-memory dev defaults.
+- The seven-day release-age gate (`minimumReleaseAge`, with `@vllnt/*` exempt) moves from the
+  `package.json` `pnpm` field, which pnpm 10 ignores, to a settings-only `pnpm-workspace.yaml`, so
+  CI installs enforce it too. The `scripts/test-package-consumer.mjs` install uses the same file
+  and pnpm version, and Renovate waits seven days before proposing an update (`@vllnt/*` exempt).
 - Canary builds publish on every push to `main` that changes the package or its shipped docs,
   under the `canary` dist-tag only; the repository-variable gate was removed.
 - `pnpm test:package` (run in CI) fails when a required file is missing from the npm tarball, a

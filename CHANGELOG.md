@@ -38,8 +38,9 @@ All notable changes to this project are documented here. The format is based on
   `convex-test` versions need `convex@^1.46.0`.
 - Releases publish only from `.github/workflows/publish.yml` with npm trusted publishing and
   provenance: stable `@latest` from a `vX.Y.Z` tag on `main`, and a canary under the `canary`
-  dist-tag on pushes to `main` that change the package or its shipped docs. The local `release`, `alpha` and `prepublishOnly`
-  scripts were removed.
+  dist-tag on pushes to `main` that change the package, its lockfile, its shipped docs or the
+  publish workflow, and on manual runs from `main`. The local `release`, `alpha` and
+  `prepublishOnly` scripts were removed.
 - The package description no longer says "exactly-once", `homepage` points to
   `https://oss.vllnt.com/packages/convex-idempotency`, and there are more keywords.
 - Internal: pnpm 10, dev-dependency upgrades, more tests and new CI package checks; no runtime
@@ -60,8 +61,9 @@ All notable changes to this project are documented here. The format is based on
   so they type-check for consumers under both `bundler` and `nodenext` module resolution.
 - TSDoc no longer suggests a `convex/values` `.parse` for `resultValidator` (those validators have
   none), and lists the `superseded` completion reason.
-- CHANGELOG: the 0.1.0 entry has its real release date (2026-09-01) and lists the claim-ID fencing
-  and purge-input checks that shipped in it; they were left under Unreleased.
+- CHANGELOG: the 0.1.0 entry has its real release date (2026-09-01) and lists the claim-ID fencing,
+  purge-input checks and `convex@^1.45.0` requirement that shipped in it; they were left under
+  Unreleased.
 
 ### Security
 

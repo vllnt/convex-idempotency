@@ -77,6 +77,14 @@ All notable changes to this project are documented here. The format is based on
 - Type tests (`*.test-d.ts`) now run with every `vitest run`, so CI type-checks the example app.
 - The publish workflow runs `pnpm test:package` in its quality gates, so a canary or stable
   release no longer relies on PR CI for the tarball check.
+- `pnpm test:package` also installs the real `npm pack` tarball in a clean project
+  (`scripts/test-package-consumer.mjs`). It imports every runtime entry point with Node, runs
+  `register` from `/test` under Vitest, and type-checks a strict consumer that uses every public
+  export under `bundler` and `nodenext` module resolution with `skipLibCheck: false`. The CI
+  Build job and the publish quality gate both run it.
+- `scripts/check-package-contents.sh` rejects test files of every flavour (`.test.`, `.spec.`,
+  `.test-d.` and `.spec-d.` with `ts`, `tsx`, `js`, `jsx`, `mjs`, `cjs`, `mts` and `cts`). It
+  missed `.spec.mts`, `.spec.cts` and the type-test forms. CI now runs its test harness.
 
 ## [0.1.0] - 2026-09-01
 

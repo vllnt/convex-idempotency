@@ -87,6 +87,25 @@ commit_tree
 run "packed test file is denied" 1
 grep -q 'DENY  src/index.test.ts' <<< "$LAST_OUTPUT" || { echo "FAIL test path not denied" >&2; failures=$((failures + 1)); }
 
+# Every test and type-test flavour is denied; look-alike source files are not
+rm -f "$REPO/src/index.test.ts"
+test_files=()
+for kind in test spec test-d spec-d; do
+  for ext in ts tsx js jsx mjs cjs mts cts; do
+    test_files+=("src/case.$kind.$ext")
+    printf 'test()\n' > "$REPO/src/case.$kind.$ext"
+  done
+done
+printf 'export {}\n' > "$REPO/src/latest.ts"
+printf 'export {}\n' > "$REPO/src/index.d.ts"
+commit_tree
+run "packed test file of every flavour is denied" 1
+for path in "${test_files[@]}"; do
+  grep -qxF "  DENY  $path" <<< "$LAST_OUTPUT" || { echo "FAIL test path not denied: $path" >&2; failures=$((failures + 1)); }
+done
+refute "look-alike source file denied: src/latest.ts" "DENY  src/latest.ts"
+refute "look-alike source file denied: src/index.d.ts" "DENY  src/index.d.ts"
+
 # Denylist hit inside dist
 rm -rf "$REPO/src"
 write_pkg '{"name":"fixture-pack","version":"1.0.0","files":["dist"]}'
